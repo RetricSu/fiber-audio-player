@@ -24,7 +24,7 @@ const DEMO_EPISODE = {
 };
 
 // Default configuration
-const DEFAULT_RPC_URL = 'http://127.0.0.1:8227';
+const DEFAULT_RPC_URL = 'http://127.0.0.1:28227';
 const DEFAULT_RECIPIENT_PUBKEY = '03032b99943822e721a651c5a5b9621043017daa9dc3ec81d83215fd2e25121187';
 
 export default function Home() {
