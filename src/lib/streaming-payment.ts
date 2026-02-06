@@ -52,6 +52,16 @@ export class StreamingPaymentService {
 
   async startStreaming(): Promise<void> {
     if (this.isStreaming) return;
+
+    // Check if we have a valid payment route before starting
+    const canPay = await this.checkPaymentRoute(this.config.ratePerSecond);
+    if (!canPay) {
+      throw new Error(
+        'No payment route available to recipient. Please ensure you have an open channel ' +
+        'with sufficient balance, either directly or through the Fiber network.'
+      );
+    }
+
     this.isStreaming = true;
     this.lastPaymentTime = Date.now();
     this.accumulatedSeconds = 0;
@@ -144,91 +154,5 @@ export class StreamingPaymentService {
     } catch {
       return false;
     }
-  }
-}
-
-// Create a mock service for demo/development when no Fiber node is available
-export class MockStreamingPaymentService extends StreamingPaymentService {
-  private mockTotalPaid = 0n;
-  private mockIsStreaming = false;
-  private mockIntervalId: ReturnType<typeof setInterval> | null = null;
-  private mockCallbacks: Set<PaymentCallback> = new Set();
-  private mockConfig: Required<StreamingPaymentConfig>;
-  private mockLastTime = 0;
-  private mockAccumulated = 0;
-
-  constructor(config: StreamingPaymentConfig) {
-    super(config);
-    this.mockConfig = {
-      ...config,
-      paymentIntervalMs: config.paymentIntervalMs || 5000,
-      currency: config.currency || 'Fibd',
-    };
-  }
-
-  override onPayment(callback: PaymentCallback): () => void {
-    this.mockCallbacks.add(callback);
-    return () => this.mockCallbacks.delete(callback);
-  }
-
-  override async startStreaming(): Promise<void> {
-    if (this.mockIsStreaming) return;
-    this.mockIsStreaming = true;
-    this.mockLastTime = Date.now();
-    this.mockAccumulated = 0;
-
-    this.mockIntervalId = setInterval(() => {
-      this.mockProcessTick();
-    }, this.mockConfig.paymentIntervalMs);
-  }
-
-  override async stopStreaming(): Promise<void> {
-    if (!this.mockIsStreaming) return;
-    this.mockIsStreaming = false;
-
-    if (this.mockIntervalId) {
-      clearInterval(this.mockIntervalId);
-      this.mockIntervalId = null;
-    }
-  }
-
-  private mockProcessTick(): void {
-    const now = Date.now();
-    const elapsed = (now - this.mockLastTime) / 1000;
-    this.mockLastTime = now;
-    this.mockAccumulated += elapsed;
-
-    const secondsToPay = Math.floor(this.mockAccumulated);
-    if (secondsToPay <= 0) return;
-
-    this.mockAccumulated -= secondsToPay;
-    const amount = ckbToShannon(this.mockConfig.ratePerSecond * secondsToPay);
-    this.mockTotalPaid += amount;
-
-    const tick: PaymentTick = {
-      timestamp: now,
-      amountShannon: amount,
-      totalPaidShannon: this.mockTotalPaid,
-      paymentHash: '0x' + Math.random().toString(16).slice(2).padEnd(64, '0'),
-      status: 'success',
-    };
-
-    this.mockCallbacks.forEach((cb) => cb(tick));
-  }
-
-  override getTotalPaid(): bigint {
-    return this.mockTotalPaid;
-  }
-
-  override getTotalPaidFormatted(): string {
-    return formatShannon(this.mockTotalPaid);
-  }
-
-  override isActive(): boolean {
-    return this.mockIsStreaming;
-  }
-
-  override async checkPaymentRoute(): Promise<boolean> {
-    return true;
   }
 }

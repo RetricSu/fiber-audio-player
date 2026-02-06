@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   StreamingPaymentService,
-  MockStreamingPaymentService,
   StreamingPaymentConfig,
   PaymentTick,
 } from '@/lib/streaming-payment';
@@ -20,8 +19,7 @@ export interface UseStreamingPaymentResult {
 }
 
 export function useStreamingPayment(
-  config: StreamingPaymentConfig,
-  useMock = false
+  config: StreamingPaymentConfig
 ): UseStreamingPaymentResult {
   const [isStreaming, setIsStreaming] = useState(false);
   const [totalPaid, setTotalPaid] = useState('0.0000');
@@ -31,8 +29,7 @@ export function useStreamingPayment(
   const serviceRef = useRef<StreamingPaymentService | null>(null);
 
   useEffect(() => {
-    const ServiceClass = useMock ? MockStreamingPaymentService : StreamingPaymentService;
-    const service = new ServiceClass(config);
+    const service = new StreamingPaymentService(config);
     serviceRef.current = service;
 
     const unsubscribe = service.onPayment((tick) => {
@@ -49,7 +46,7 @@ export function useStreamingPayment(
       unsubscribe();
       service.stopStreaming();
     };
-  }, [config.rpcUrl, config.recipientPubkey, config.ratePerSecond, useMock]);
+  }, [config.rpcUrl, config.recipientPubkey, config.ratePerSecond]);
 
   const start = useCallback(async () => {
     if (!serviceRef.current) return;

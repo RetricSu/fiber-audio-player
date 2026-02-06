@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'motion/react';
+import { ChannelStatus } from '@/hooks/use-fiber-node';
 
 interface NodeStatusProps {
   isConnected: boolean;
@@ -15,6 +16,12 @@ interface NodeStatusProps {
   error: string | null;
   onConnect: () => void;
   onDisconnect: () => void;
+  // Channel status props
+  channelStatus?: ChannelStatus;
+  channelError?: string | null;
+  availableBalance?: string;
+  onCheckRoute?: () => void;
+  onOpenChannel?: () => void;
 }
 
 export function NodeStatus({
@@ -24,7 +31,34 @@ export function NodeStatus({
   error,
   onConnect,
   onDisconnect,
+  channelStatus = 'idle',
+  channelError,
+  availableBalance = '0',
+  onCheckRoute,
+  onOpenChannel,
 }: NodeStatusProps) {
+  const getChannelStatusDisplay = () => {
+    switch (channelStatus) {
+      case 'checking':
+        return { text: 'Checking route...', color: 'text-fiber-warning', bg: 'bg-fiber-warning/10' };
+      case 'opening_channel':
+        return { text: 'Opening channel...', color: 'text-fiber-warning', bg: 'bg-fiber-warning/10' };
+      case 'waiting_confirmation':
+        return { text: 'Waiting for confirmation...', color: 'text-fiber-warning', bg: 'bg-fiber-warning/10' };
+      case 'ready':
+        return { text: 'Route available', color: 'text-fiber-accent', bg: 'bg-fiber-accent/10' };
+      case 'no_route':
+        return { text: 'No route found', color: 'text-red-400', bg: 'bg-red-500/10' };
+      case 'error':
+        return { text: 'Error', color: 'text-red-400', bg: 'bg-red-500/10' };
+      default:
+        return null;
+    }
+  };
+
+  const channelStatusDisplay = getChannelStatusDisplay();
+  const isChannelBusy = channelStatus === 'checking' || channelStatus === 'opening_channel' || channelStatus === 'waiting_confirmation';
+
   return (
     <div className="relative overflow-hidden rounded-2xl bg-fiber-surface/50 backdrop-blur-sm border border-fiber-border p-5">
       {/* Background pattern */}
@@ -142,6 +176,66 @@ export function NodeStatus({
             <div className="flex items-center justify-between text-[10px] font-mono text-fiber-muted">
               <span>v{nodeInfo.version}</span>
               <span className="text-fiber-accent">● LIVE</span>
+            </div>
+
+            {/* Channel/Route Status */}
+            {channelStatusDisplay && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`p-3 rounded-lg ${channelStatusDisplay.bg} border border-current/20`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className={`text-xs font-mono ${channelStatusDisplay.color}`}>
+                    {channelStatusDisplay.text}
+                  </span>
+                  {isChannelBusy && (
+                    <motion.div
+                      className="w-3 h-3 border-2 border-fiber-warning border-t-transparent rounded-full"
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                    />
+                  )}
+                </div>
+                {channelStatus === 'ready' && availableBalance !== '0' && (
+                  <p className="text-xs text-fiber-muted">
+                    Available: <span className="text-white">{availableBalance} CKB</span>
+                  </p>
+                )}
+                {channelStatus === 'waiting_confirmation' && (
+                  <p className="text-xs text-fiber-muted">
+                    Channel is being confirmed on-chain. This may take a few minutes.
+                  </p>
+                )}
+                {channelError && (
+                  <p className="text-xs text-red-400 mt-1">{channelError}</p>
+                )}
+              </motion.div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex gap-2">
+              {/* Check Route Button */}
+              {onCheckRoute && (
+                <button
+                  onClick={onCheckRoute}
+                  disabled={isChannelBusy}
+                  className="flex-1 py-2 px-3 text-xs font-mono uppercase tracking-wider rounded-lg bg-fiber-dark/50 text-fiber-muted hover:text-fiber-accent hover:bg-fiber-accent/10 border border-fiber-border hover:border-fiber-accent/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {channelStatus === 'ready' ? 'Re-check' : 'Check Route'}
+                </button>
+              )}
+
+              {/* Open Channel Button - show when no route or error */}
+              {onOpenChannel && (channelStatus === 'no_route' || channelStatus === 'error') && (
+                <button
+                  onClick={onOpenChannel}
+                  disabled={isChannelBusy}
+                  className="flex-1 py-2 px-3 text-xs font-mono uppercase tracking-wider rounded-lg bg-fiber-accent/20 text-fiber-accent hover:bg-fiber-accent/30 border border-fiber-accent/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Open Channel
+                </button>
+              )}
             </div>
           </motion.div>
         ) : !isConnecting && !error ? (

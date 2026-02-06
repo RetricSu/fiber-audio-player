@@ -22,7 +22,6 @@ interface AudioPlayerProps {
   episode: Episode;
   rpcUrl: string;
   recipientPubkey: string;
-  useMockPayments?: boolean;
 }
 
 function formatTime(seconds: number): string {
@@ -36,21 +35,17 @@ export function AudioPlayer({
   episode,
   rpcUrl,
   recipientPubkey,
-  useMockPayments = true,
 }: AudioPlayerProps) {
   const [volume, setVolumeState] = useState(0.8);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
 
   const audio = useAudioPlayer(episode.audioUrl);
-  const payment = useStreamingPayment(
-    {
-      rpcUrl,
-      recipientPubkey,
-      ratePerSecond: episode.pricePerSecond,
-      paymentIntervalMs: 5000,
-    },
-    useMockPayments
-  );
+  const payment = useStreamingPayment({
+    rpcUrl,
+    recipientPubkey,
+    ratePerSecond: episode.pricePerSecond,
+    paymentIntervalMs: 5000,
+  });
 
   // Sync payment streaming with playback
   useEffect(() => {

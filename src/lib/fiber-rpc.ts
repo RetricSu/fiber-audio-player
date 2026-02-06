@@ -78,6 +78,43 @@ export interface Channel {
   created_at: string;
 }
 
+export interface OpenChannelParams {
+  peer_id: string;
+  funding_amount: string; // hex u128 - amount in shannons
+  public?: boolean;
+  funding_udt_type_script?: Script;
+  shutdown_script?: Script;
+  commitment_delay_epoch?: string;
+  commitment_fee_rate?: string;
+  funding_fee_rate?: string;
+  tlc_expiry_delta?: string;
+  tlc_min_value?: string;
+  tlc_fee_proportional_millionths?: string;
+  max_tlc_value_in_flight?: string;
+  max_tlc_number_in_flight?: string;
+}
+
+export interface OpenChannelResult {
+  temporary_channel_id: string;
+}
+
+export interface PeerInfo {
+  pubkey: string;
+  peer_id: string;  // Multibase format like "Qm..."
+  address: string;
+}
+
+export type ChannelState =
+  | 'NegotiatingFunding'
+  | 'CollaboratingFundingTx'
+  | 'SigningCommitment'
+  | 'AwaitingTxSignatures'
+  | 'AwaitingChannelReady'
+  | 'ChannelReady'
+  | 'ShuttingDown'
+  | 'ClosingPending'
+  | 'Closed';
+
 export interface NodeInfo {
   version: string;
   commit_hash: string;
@@ -158,6 +195,80 @@ export class FiberRpcClient {
   // Channel Operations
   async listChannels(options?: { peer_id?: string; include_closed?: boolean }): Promise<{ channels: Channel[] }> {
     return this.call('list_channels', [options || {}]);
+  }
+
+  async openChannel(params: OpenChannelParams): Promise<OpenChannelResult> {
+    return this.call<OpenChannelResult>('open_channel', [params]);
+  }
+
+  async getChannel(channelId: string): Promise<Channel> {
+    return this.call<Channel>('list_channels', [{ channel_id: channelId }]).then(
+      (result) => (result as unknown as { channels: Channel[] }).channels[0]
+    );
+  }
+
+  // Peer Operations
+  async connectPeer(address: string): Promise<void> {
+    return this.call<void>('connect_peer', [{ address }]);
+  }
+
+  async disconnectPeer(peerId: string): Promise<void> {
+    return this.call<void>('disconnect_peer', [{ peer_id: peerId }]);
+  }
+
+  async listPeers(): Promise<{ peers: PeerInfo[] }> {
+    return this.call<{ peers: PeerInfo[] }>('list_peers', [{}]);
+  }
+
+  // Find peer_id (Qm... format) by pubkey
+  async findPeerIdByPubkey(pubkey: string): Promise<string | null> {
+    const result = await this.listPeers();
+    const peer = result.peers.find((p) => p.pubkey === pubkey);
+    return peer?.peer_id || null;
+  }
+
+  // Open channel by pubkey (looks up peer_id first)
+  async openChannelByPubkey(
+    pubkey: string,
+    fundingAmount: string,
+    options?: { public?: boolean }
+  ): Promise<OpenChannelResult> {
+    const peerId = await this.findPeerIdByPubkey(pubkey);
+    if (!peerId) {
+      throw new Error(
+        `Peer not connected. The recipient node (${pubkey.slice(0, 10)}...) is not in your peer list. ` +
+        `They need to be connected first.`
+      );
+    }
+    return this.openChannel({
+      peer_id: peerId,
+      funding_amount: fundingAmount,
+      public: options?.public,
+    });
+  }
+
+  // Check if we have a usable channel to a peer (directly or via routing)
+  async findChannelToPeer(peerId: string): Promise<Channel | null> {
+    const result = await this.listChannels({ peer_id: peerId });
+    const readyChannel = result.channels.find(
+      (ch) => ch.state.state_name === 'ChannelReady' && BigInt(ch.local_balance) > 0n
+    );
+    return readyChannel || null;
+  }
+
+  // Check if payment route exists to target (uses dry_run)
+  async checkPaymentRoute(targetPubkey: string, amount: string): Promise<boolean> {
+    try {
+      const result = await this.sendPayment({
+        target_pubkey: targetPubkey,
+        amount,
+        keysend: true,
+        dry_run: true,
+      });
+      return result.status !== 'Failed';
+    } catch {
+      return false;
+    }
   }
 
   // Invoice Operations

@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { AudioPlayer } from '@/components/AudioPlayer';
 import { NodeStatus } from '@/components/NodeStatus';
 import { PaymentHistory } from '@/components/PaymentHistory';
+import { PeerSelector } from '@/components/PeerSelector';
 import { useFiberNode } from '@/hooks/use-fiber-node';
 import { useStreamingPayment } from '@/hooks/use-streaming-payment';
 
@@ -25,26 +26,32 @@ const DEMO_EPISODE = {
 
 // Default configuration
 const DEFAULT_RPC_URL = 'http://127.0.0.1:28227';
-const DEFAULT_RECIPIENT_PUBKEY = '03032b99943822e721a651c5a5b9621043017daa9dc3ec81d83215fd2e25121187';
+const DEFAULT_RECIPIENT_PUBKEY = '0291a6576bd5a94bd74b27080a48340875338fff9f6d6361fe6b8db8d0d1912fcc';
 
 export default function Home() {
   const [rpcUrl, setRpcUrl] = useState(DEFAULT_RPC_URL);
   const [recipientPubkey, setRecipientPubkey] = useState(DEFAULT_RECIPIENT_PUBKEY);
   const [showSettings, setShowSettings] = useState(false);
-  const [useMockPayments, setUseMockPayments] = useState(true);
 
   const fiberNode = useFiberNode(rpcUrl);
 
+  // Auto-select first peer if connected and no recipient selected
+  useEffect(() => {
+    if (fiberNode.isConnected && fiberNode.peers.length > 0) {
+      const currentPeerExists = fiberNode.peers.some((p) => p.pubkey === recipientPubkey);
+      if (!currentPeerExists) {
+        setRecipientPubkey(fiberNode.peers[0].pubkey);
+      }
+    }
+  }, [fiberNode.isConnected, fiberNode.peers, recipientPubkey]);
+
   // For payment history, we need to track payments
-  const payment = useStreamingPayment(
-    {
-      rpcUrl,
-      recipientPubkey,
-      ratePerSecond: DEMO_EPISODE.pricePerSecond,
-      paymentIntervalMs: 5000,
-    },
-    useMockPayments
-  );
+  const payment = useStreamingPayment({
+    rpcUrl,
+    recipientPubkey,
+    ratePerSecond: DEMO_EPISODE.pricePerSecond,
+    paymentIntervalMs: 5000,
+  });
 
   return (
     <div className="min-h-screen py-8 px-4 sm:px-6 lg:px-8">
@@ -110,7 +117,6 @@ export default function Home() {
               episode={DEMO_EPISODE}
               rpcUrl={rpcUrl}
               recipientPubkey={recipientPubkey}
-              useMockPayments={useMockPayments}
             />
           </motion.div>
 
@@ -129,6 +135,11 @@ export default function Home() {
               error={fiberNode.error}
               onConnect={fiberNode.connect}
               onDisconnect={fiberNode.disconnect}
+              channelStatus={fiberNode.channelStatus}
+              channelError={fiberNode.channelError}
+              availableBalance={fiberNode.availableBalance}
+              onCheckRoute={() => fiberNode.checkPaymentRoute(recipientPubkey)}
+              onOpenChannel={() => fiberNode.setupChannel(recipientPubkey)}
             />
 
             {/* Payment History */}
@@ -189,22 +200,6 @@ export default function Home() {
               className="overflow-hidden"
             >
               <div className="p-5 rounded-2xl bg-fiber-surface/50 backdrop-blur-sm border border-fiber-border space-y-4">
-                {/* Mock payments toggle */}
-                <label className="flex items-center justify-between cursor-pointer">
-                  <span className="text-sm text-fiber-muted">Demo Mode (Mock Payments)</span>
-                  <button
-                    onClick={() => setUseMockPayments(!useMockPayments)}
-                    className={`relative w-12 h-6 rounded-full transition-colors ${
-                      useMockPayments ? 'bg-fiber-accent' : 'bg-fiber-border'
-                    }`}
-                  >
-                    <motion.div
-                      className="absolute top-1 w-4 h-4 rounded-full bg-white"
-                      animate={{ left: useMockPayments ? '1.5rem' : '0.25rem' }}
-                    />
-                  </button>
-                </label>
-
                 {/* RPC URL */}
                 <div>
                   <label className="block text-xs text-fiber-muted mb-2 font-mono uppercase tracking-wider">
@@ -219,24 +214,35 @@ export default function Home() {
                   />
                 </div>
 
-                {/* Recipient pubkey */}
-                <div>
-                  <label className="block text-xs text-fiber-muted mb-2 font-mono uppercase tracking-wider">
-                    Recipient Public Key
-                  </label>
-                  <input
-                    type="text"
-                    value={recipientPubkey}
-                    onChange={(e) => setRecipientPubkey(e.target.value)}
-                    className="w-full px-3 py-2 bg-fiber-dark border border-fiber-border rounded-lg text-sm font-mono text-white focus:outline-none focus:border-fiber-accent/50 transition-colors"
-                    placeholder="03..."
+                {/* Recipient peer selector */}
+                {fiberNode.isConnected && fiberNode.peers.length > 0 ? (
+                  <PeerSelector
+                    peers={fiberNode.peers}
+                    selectedPubkey={recipientPubkey}
+                    onSelect={setRecipientPubkey}
                   />
-                </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs text-fiber-muted mb-2 font-mono uppercase tracking-wider">
+                      Recipient Public Key
+                    </label>
+                    <input
+                      type="text"
+                      value={recipientPubkey}
+                      onChange={(e) => setRecipientPubkey(e.target.value)}
+                      className="w-full px-3 py-2 bg-fiber-dark border border-fiber-border rounded-lg text-sm font-mono text-white focus:outline-none focus:border-fiber-accent/50 transition-colors"
+                      placeholder="03..."
+                    />
+                    {fiberNode.isConnected && fiberNode.peers.length === 0 && (
+                      <p className="text-[10px] text-fiber-warning mt-1">
+                        No peers connected. Connect to peers first.
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 <p className="text-[10px] text-fiber-muted/60">
-                  {useMockPayments
-                    ? 'Demo mode simulates payments without connecting to a real Fiber node.'
-                    : 'Live mode connects to your local Fiber node and sends real payments.'}
+                  Connect to your local Fiber node to enable real-time streaming payments.
                 </p>
               </div>
             </motion.div>
