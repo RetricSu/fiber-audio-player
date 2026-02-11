@@ -19,9 +19,12 @@ interface NodeStatusProps {
   // Channel status props
   channelStatus?: ChannelStatus;
   channelError?: string | null;
+  channelStateName?: string | null;
+  channelElapsed?: number;
   availableBalance?: string;
   onCheckRoute?: () => void;
   onOpenChannel?: () => void;
+  onCancelSetup?: () => void;
 }
 
 export function NodeStatus({
@@ -33,9 +36,12 @@ export function NodeStatus({
   onDisconnect,
   channelStatus = 'idle',
   channelError,
+  channelStateName,
+  channelElapsed = 0,
   availableBalance = '0',
   onCheckRoute,
   onOpenChannel,
+  onCancelSetup,
 }: NodeStatusProps) {
   const getChannelStatusDisplay = () => {
     switch (channelStatus) {
@@ -189,13 +195,20 @@ export function NodeStatus({
                   <span className={`text-xs font-mono ${channelStatusDisplay.color}`}>
                     {channelStatusDisplay.text}
                   </span>
-                  {isChannelBusy && (
-                    <motion.div
-                      className="w-3 h-3 border-2 border-fiber-warning border-t-transparent rounded-full"
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                    />
-                  )}
+                  <div className="flex items-center gap-2">
+                    {isChannelBusy && channelElapsed > 0 && (
+                      <span className="text-[10px] font-mono text-fiber-muted tabular-nums">
+                        {Math.floor(channelElapsed / 60)}:{(channelElapsed % 60).toString().padStart(2, '0')}
+                      </span>
+                    )}
+                    {isChannelBusy && (
+                      <motion.div
+                        className="w-3 h-3 border-2 border-fiber-warning border-t-transparent rounded-full"
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                      />
+                    )}
+                  </div>
                 </div>
                 {channelStatus === 'ready' && availableBalance !== '0' && (
                   <p className="text-xs text-fiber-muted">
@@ -203,9 +216,24 @@ export function NodeStatus({
                   </p>
                 )}
                 {channelStatus === 'waiting_confirmation' && (
-                  <p className="text-xs text-fiber-muted">
-                    Channel is being confirmed on-chain. This may take a few minutes.
-                  </p>
+                  <div className="space-y-1.5">
+                    {channelStateName && (
+                      <p className="text-[10px] font-mono text-fiber-muted">
+                        State: <span className="text-white/70">{channelStateName}</span>
+                      </p>
+                    )}
+                    <p className="text-xs text-fiber-muted">
+                      Channel is being confirmed on-chain. This may take a few minutes.
+                    </p>
+                    {onCancelSetup && (
+                      <button
+                        onClick={onCancelSetup}
+                        className="mt-1.5 px-2 py-1 text-[10px] font-mono uppercase tracking-wider rounded bg-fiber-dark/80 text-fiber-muted hover:text-red-400 hover:bg-red-500/10 border border-fiber-border hover:border-red-500/30 transition-all"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
                 )}
                 {channelError && (
                   <p className="text-xs text-red-400 mt-1">{channelError}</p>

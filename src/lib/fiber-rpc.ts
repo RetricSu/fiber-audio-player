@@ -1,27 +1,68 @@
-// Fiber Network RPC Types based on fiber-lib spec
+/**
+ * Fiber Network RPC client for the audio player.
+ *
+ * Re-exports the core SDK client from @fiber-pay/sdk/browser and extends it
+ * with audio-player-specific convenience methods (keysend, peer lookup,
+ * channel helpers, route checking).
+ */
 
-export interface FiberRpcConfig {
-  url: string;
-  timeout?: number;
+import {
+  FiberRpcClient as BaseFiberRpcClient,
+  FiberRpcError,
+  toHex,
+  fromHex,
+  ckbToShannons,
+  shannonsToCkb,
+} from '@fiber-pay/sdk/browser';
+
+import type {
+  HexString,
+  ChannelInfo,
+  PeerInfo as SdkPeerInfo,
+  SendPaymentParams as SdkSendPaymentParams,
+  NewInvoiceParams,
+  ParseInvoiceParams,
+  OpenChannelParams as SdkOpenChannelParams,
+  OpenChannelResult,
+  PaymentStatus,
+  ChannelState,
+  ListChannelsParams,
+} from '@fiber-pay/sdk/browser';
+
+// ─── Re-export SDK types under audio-player-friendly aliases ─────────────────
+
+export { FiberRpcError, toHex, fromHex };
+
+export type { HexString, ChannelState, PaymentStatus };
+
+/** Channel shape used throughout the audio player UI */
+export type Channel = ChannelInfo;
+
+/** Node info returned by `node_info` RPC */
+export interface NodeInfo {
+  version: string;
+  commit_hash: string;
+  public_key: string;
+  peer_id?: string;
+  node_name: string | null;
+  addresses: string[];
+  chain_hash: string;
+  open_channel_count: number;
+  channel_count?: number;
+  pending_channel_count: number;
+  peers_count: number;
+  udt_cfg_infos: unknown[];
 }
 
-export interface Script {
-  code_hash: string;
-  hash_type: 'data' | 'data1' | 'data2' | 'type';
-  args: string;
+/** Peer shape the audio player expects (peer_id + address + optional pubkey from graph) */
+export interface PeerInfo {
+  peer_id: string;
+  address: string;
+  /** Hex pubkey (node_id from graph_nodes). Only available if the peer has announced to the graph. */
+  pubkey: string | null;
 }
 
-export interface InvoiceParams {
-  amount: string; // hex u128
-  currency: 'Fibb' | 'Fibt' | 'Fibd';
-  description?: string;
-  payment_preimage?: string;
-  expiry?: string; // hex u64
-  final_expiry_delta?: string;
-  udt_type_script?: Script;
-  hash_algorithm?: 'CkbHash' | 'Sha256';
-}
-
+/** Invoice data shape */
 export interface Invoice {
   currency: string;
   amount: string;
@@ -33,9 +74,15 @@ export interface Invoice {
   };
 }
 
-export interface NewInvoiceResult {
-  invoice_address: string;
-  invoice: Invoice;
+export interface InvoiceParams {
+  amount: string;
+  currency: 'Fibb' | 'Fibt' | 'Fibd';
+  description?: string;
+  payment_preimage?: string;
+  expiry?: string;
+  final_expiry_delta?: string;
+  udt_type_script?: { code_hash: string; hash_type: string; args: string };
+  hash_algorithm?: 'CkbHash' | 'Sha256';
 }
 
 export interface SendPaymentParams {
@@ -52,8 +99,6 @@ export interface SendPaymentParams {
   dry_run?: boolean;
 }
 
-export type PaymentStatus = 'Created' | 'Inflight' | 'Success' | 'Failed';
-
 export interface PaymentResult {
   payment_hash: string;
   status: PaymentStatus;
@@ -64,26 +109,12 @@ export interface PaymentResult {
   custom_records: Record<string, string> | null;
 }
 
-export interface Channel {
-  channel_id: string;
-  peer_id: string;
-  state: {
-    state_name: string;
-    state_flags: string[];
-  };
-  local_balance: string;
-  remote_balance: string;
-  offered_tlc_balance: string;
-  received_tlc_balance: string;
-  created_at: string;
-}
-
 export interface OpenChannelParams {
   peer_id: string;
-  funding_amount: string; // hex u128 - amount in shannons
+  funding_amount: string;
   public?: boolean;
-  funding_udt_type_script?: Script;
-  shutdown_script?: Script;
+  funding_udt_type_script?: { code_hash: string; hash_type: string; args: string };
+  shutdown_script?: { code_hash: string; hash_type: string; args: string };
   commitment_delay_epoch?: string;
   commitment_fee_rate?: string;
   funding_fee_rate?: string;
@@ -94,169 +125,109 @@ export interface OpenChannelParams {
   max_tlc_number_in_flight?: string;
 }
 
-export interface OpenChannelResult {
-  temporary_channel_id: string;
+export interface FiberRpcConfig {
+  url: string;
+  timeout?: number;
 }
 
-export interface PeerInfo {
-  pubkey: string;
-  peer_id: string;  // Multibase format like "Qm..."
-  address: string;
-}
+// ─── Extended RPC Client ─────────────────────────────────────────────────────
 
-export type ChannelState =
-  | 'NegotiatingFunding'
-  | 'CollaboratingFundingTx'
-  | 'SigningCommitment'
-  | 'AwaitingTxSignatures'
-  | 'AwaitingChannelReady'
-  | 'ChannelReady'
-  | 'ShuttingDown'
-  | 'ClosingPending'
-  | 'Closed';
-
-export interface NodeInfo {
-  version: string;
-  commit_hash: string;
-  public_key: string;
-  node_name: string | null;
-  addresses: string[];
-  chain_hash: string;
-  open_channel_count: number;
-  pending_channel_count: number;
-  peers_count: number;
-  udt_cfg_infos: object[];
-}
-
-export interface RpcResponse<T> {
-  jsonrpc: '2.0';
-  id: string | number;
-  result?: T;
-  error?: {
-    code: number;
-    message: string;
-    data?: unknown;
-  };
-}
-
-let rpcId = 0;
-
+/**
+ * Audio-player Fiber RPC client.
+ *
+ * Wraps `@fiber-pay/sdk`'s `FiberRpcClient` and adds convenience helpers that
+ * the streaming-payment service and React hooks rely on.
+ */
 export class FiberRpcClient {
-  private url: string;
-  private timeout: number;
+  private sdk: BaseFiberRpcClient;
 
   constructor(config: FiberRpcConfig) {
-    this.url = config.url;
-    this.timeout = config.timeout || 30000;
-  }
-
-  private async call<T>(method: string, params: unknown[]): Promise<T> {
-    const id = ++rpcId;
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-
-    try {
-      const response = await fetch(this.url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id,
-          method,
-          params,
-        }),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data: RpcResponse<T> = await response.json();
-
-      if (data.error) {
-        throw new Error(`RPC Error ${data.error.code}: ${data.error.message}`);
-      }
-
-      return data.result as T;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-
-  // Node Info
-  async getNodeInfo(): Promise<NodeInfo> {
-    return this.call<NodeInfo>('node_info', [{}]);
-  }
-
-  // Channel Operations
-  async listChannels(options?: { peer_id?: string; include_closed?: boolean }): Promise<{ channels: Channel[] }> {
-    return this.call('list_channels', [options || {}]);
-  }
-
-  async openChannel(params: OpenChannelParams): Promise<OpenChannelResult> {
-    return this.call<OpenChannelResult>('open_channel', [params]);
-  }
-
-  async getChannel(channelId: string): Promise<Channel> {
-    return this.call<Channel>('list_channels', [{ channel_id: channelId }]).then(
-      (result) => (result as unknown as { channels: Channel[] }).channels[0]
-    );
-  }
-
-  // Peer Operations
-  async connectPeer(address: string): Promise<void> {
-    return this.call<void>('connect_peer', [{ address }]);
-  }
-
-  async disconnectPeer(peerId: string): Promise<void> {
-    return this.call<void>('disconnect_peer', [{ peer_id: peerId }]);
-  }
-
-  async listPeers(): Promise<{ peers: PeerInfo[] }> {
-    return this.call<{ peers: PeerInfo[] }>('list_peers', [{}]);
-  }
-
-  // Find peer_id (Qm... format) by pubkey
-  async findPeerIdByPubkey(pubkey: string): Promise<string | null> {
-    const result = await this.listPeers();
-    const peer = result.peers.find((p) => p.pubkey === pubkey);
-    return peer?.peer_id || null;
-  }
-
-  // Open channel by pubkey (looks up peer_id first)
-  async openChannelByPubkey(
-    pubkey: string,
-    fundingAmount: string,
-    options?: { public?: boolean }
-  ): Promise<OpenChannelResult> {
-    const peerId = await this.findPeerIdByPubkey(pubkey);
-    if (!peerId) {
-      throw new Error(
-        `Peer not connected. The recipient node (${pubkey.slice(0, 10)}...) is not in your peer list. ` +
-        `They need to be connected first.`
-      );
-    }
-    return this.openChannel({
-      peer_id: peerId,
-      funding_amount: fundingAmount,
-      public: options?.public,
+    this.sdk = new BaseFiberRpcClient({
+      url: config.url,
+      timeout: config.timeout,
     });
   }
 
-  // Check if we have a usable channel to a peer (directly or via routing)
+  /** Expose the underlying SDK client for advanced usage */
+  get raw(): BaseFiberRpcClient {
+    return this.sdk;
+  }
+
+  // ── Node ─────────────────────────────────────────────────────────────────
+
+  async getNodeInfo(): Promise<NodeInfo> {
+    const result = await this.sdk.nodeInfo();
+    return result as unknown as NodeInfo;
+  }
+
+  // ── Channels ─────────────────────────────────────────────────────────────
+
+  async listChannels(options?: { peer_id?: string; include_closed?: boolean }): Promise<{ channels: Channel[] }> {
+    const result = await this.sdk.listChannels(options as ListChannelsParams);
+    return result as { channels: Channel[] };
+  }
+
+  async openChannel(params: OpenChannelParams): Promise<OpenChannelResult> {
+    return this.sdk.openChannel(params as unknown as SdkOpenChannelParams);
+  }
+
+  async getChannel(channelId: string): Promise<Channel> {
+    const result = await this.sdk.listChannels({ channel_id: channelId } as ListChannelsParams);
+    return (result as { channels: Channel[] }).channels[0];
+  }
+
+  // ── Peers ────────────────────────────────────────────────────────────────
+
+  async connectPeer(address: string): Promise<void> {
+    await this.sdk.connectPeer({ address });
+  }
+
+  async disconnectPeer(peerId: string): Promise<void> {
+    await this.sdk.disconnectPeer({ peer_id: peerId });
+  }
+
+  async listPeers(): Promise<{ peers: PeerInfo[] }> {
+    const result = await this.sdk.listPeers();
+    const sdkPeers = (result as { peers: SdkPeerInfo[] }).peers ?? [];
+
+    // Build a peer_id → pubkey mapping from graph_nodes.
+    // graph_nodes returns { node_id (hex pubkey), addresses (multiaddr containing /p2p/<peer_id>) }.
+    // We extract peer_id from the multiaddr and map it to node_id.
+    let peerIdToPubkey: Map<string, string> = new Map();
+    try {
+      const graphResult = await this.sdk.graphNodes();
+      const nodes = (graphResult as { nodes: Array<{ node_id: string; addresses: string[] }> }).nodes ?? [];
+      for (const node of nodes) {
+        for (const addr of node.addresses) {
+          // Multiaddr format: /ip4/x.x.x.x/tcp/port/p2p/<peer_id>
+          const p2pMatch = addr.match(/\/p2p\/([^/]+)$/);
+          if (p2pMatch) {
+            peerIdToPubkey.set(p2pMatch[1], node.node_id);
+          }
+        }
+      }
+    } catch {
+      // graph_nodes may not be available or may be empty — non-fatal
+    }
+
+    const peers: PeerInfo[] = sdkPeers.map((p) => ({
+      peer_id: p.peer_id,
+      address: p.addresses?.[0] ?? '',
+      pubkey: peerIdToPubkey.get(p.peer_id) ?? null,
+    }));
+    return { peers };
+  }
+
+  // ── Convenience: Peer helpers ────────────────────────────────────────────
+
   async findChannelToPeer(peerId: string): Promise<Channel | null> {
     const result = await this.listChannels({ peer_id: peerId });
     const readyChannel = result.channels.find(
       (ch) => ch.state.state_name === 'ChannelReady' && BigInt(ch.local_balance) > 0n
     );
-    return readyChannel || null;
+    return readyChannel ?? null;
   }
 
-  // Check if payment route exists to target (uses dry_run)
   async checkPaymentRoute(targetPubkey: string, amount: string): Promise<boolean> {
     try {
       const result = await this.sendPayment({
@@ -271,41 +242,49 @@ export class FiberRpcClient {
     }
   }
 
-  // Invoice Operations
-  async newInvoice(params: InvoiceParams): Promise<NewInvoiceResult> {
-    return this.call<NewInvoiceResult>('new_invoice', [params]);
+  // ── Invoices ─────────────────────────────────────────────────────────────
+
+  async newInvoice(params: InvoiceParams): Promise<{ invoice_address: string; invoice: Invoice }> {
+    const result = await this.sdk.newInvoice(params as unknown as NewInvoiceParams);
+    return result as unknown as { invoice_address: string; invoice: Invoice };
   }
 
   async parseInvoice(invoice: string): Promise<Invoice> {
-    return this.call<Invoice>('parse_invoice', [{ invoice }]);
+    const result = await this.sdk.parseInvoice({ invoice } as ParseInvoiceParams);
+    return result as unknown as Invoice;
   }
 
   async getInvoice(paymentHash: string): Promise<Invoice> {
-    return this.call<Invoice>('get_invoice', [{ payment_hash: paymentHash }]);
+    const result = await this.sdk.getInvoice({ payment_hash: paymentHash as HexString });
+    return result as unknown as Invoice;
   }
 
   async cancelInvoice(paymentHash: string): Promise<void> {
-    return this.call<void>('cancel_invoice', [{ payment_hash: paymentHash }]);
+    await this.sdk.cancelInvoice({ payment_hash: paymentHash as HexString });
   }
 
   async settleInvoice(paymentHash: string, paymentPreimage: string): Promise<void> {
-    return this.call<void>('settle_invoice', [{
-      payment_hash: paymentHash,
-      payment_preimage: paymentPreimage
-    }]);
+    await this.sdk.settleInvoice({ payment_hash: paymentHash as HexString, payment_preimage: paymentPreimage as HexString });
   }
 
-  // Payment Operations
+  // ── Payments ─────────────────────────────────────────────────────────────
+
   async sendPayment(params: SendPaymentParams): Promise<PaymentResult> {
-    return this.call<PaymentResult>('send_payment', [params]);
+    const result = await this.sdk.sendPayment(params as unknown as SdkSendPaymentParams);
+    return result as unknown as PaymentResult;
   }
 
   async getPayment(paymentHash: string): Promise<PaymentResult> {
-    return this.call<PaymentResult>('get_payment', [{ payment_hash: paymentHash }]);
+    const result = await this.sdk.getPayment({ payment_hash: paymentHash as HexString });
+    return result as unknown as PaymentResult;
   }
 
-  // Keysend payment (spontaneous payment without invoice)
-  async keysend(targetPubkey: string, amount: string, customRecords?: Record<string, string>): Promise<PaymentResult> {
+  /** Spontaneous keysend payment (no invoice needed) */
+  async keysend(
+    targetPubkey: string,
+    amount: string,
+    customRecords?: Record<string, string>
+  ): Promise<PaymentResult> {
     return this.sendPayment({
       target_pubkey: targetPubkey,
       amount,
@@ -315,29 +294,24 @@ export class FiberRpcClient {
   }
 }
 
-// Helper functions for hex conversion
-export function toHex(value: number | bigint): string {
-  return '0x' + value.toString(16);
-}
+// ─── Utility helpers ─────────────────────────────────────────────────────────
 
-export function fromHex(hex: string): bigint {
-  return BigInt(hex);
-}
-
-// Shannon conversion (1 CKB = 10^8 shannon)
+/** 1 CKB = 10^8 shannon */
 export const SHANNON_PER_CKB = 100_000_000n;
 
+/** Convert CKB to shannon as bigint */
 export function ckbToShannon(ckb: number): bigint {
   return BigInt(Math.floor(ckb * 100_000_000));
 }
 
+/** Convert shannon bigint to CKB number */
 export function shannonToCkb(shannon: bigint): number {
   return Number(shannon) / 100_000_000;
 }
 
-// Format shannon amount for display
+/** Format a shannon amount for display */
 export function formatShannon(shannon: bigint | string, decimals = 4): string {
-  const value = typeof shannon === 'string' ? fromHex(shannon) : shannon;
+  const value = typeof shannon === 'string' ? BigInt(shannon) : shannon;
   const ckb = shannonToCkb(value);
   return ckb.toFixed(decimals);
 }

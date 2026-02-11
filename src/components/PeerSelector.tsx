@@ -6,22 +6,24 @@ import { PeerInfo } from '@/lib/fiber-rpc';
 
 interface PeerSelectorProps {
   peers: PeerInfo[];
-  selectedPubkey: string;
-  onSelect: (pubkey: string) => void;
+  selectedPeerId: string;
+  onSelect: (peerId: string) => void;
   disabled?: boolean;
 }
 
-export function PeerSelector({ peers, selectedPubkey, onSelect, disabled }: PeerSelectorProps) {
+export function PeerSelector({ peers, selectedPeerId, onSelect, disabled }: PeerSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const selectedPeer = peers.find((p) => p.pubkey === selectedPubkey);
+  const selectedPeer = peers.find((p) => p.peer_id === selectedPeerId);
 
-  const truncatePubkey = (pubkey: string) => {
-    return `${pubkey.slice(0, 8)}...${pubkey.slice(-6)}`;
+  const truncateId = (id: string, prefixLen = 8, suffixLen = 6) => {
+    if (id.length <= prefixLen + suffixLen + 3) return id;
+    return `${id.slice(0, prefixLen)}...${id.slice(-suffixLen)}`;
   };
 
-  const truncatePeerId = (peerId: string) => {
-    return `${peerId.slice(0, 12)}...`;
+  const displayLabel = (peer: PeerInfo) => {
+    if (peer.pubkey) return truncateId(peer.pubkey);
+    return truncateId(peer.peer_id, 12, 4);
   };
 
   return (
@@ -43,10 +45,10 @@ export function PeerSelector({ peers, selectedPubkey, onSelect, disabled }: Peer
             {selectedPeer ? (
               <>
                 <p className="text-sm font-mono text-white truncate">
-                  {truncatePubkey(selectedPeer.pubkey)}
+                  {displayLabel(selectedPeer)}
                 </p>
                 <p className="text-[10px] text-fiber-muted truncate">
-                  {truncatePeerId(selectedPeer.peer_id)}
+                  {truncateId(selectedPeer.peer_id, 12, 4)}
                 </p>
               </>
             ) : (
@@ -82,27 +84,27 @@ export function PeerSelector({ peers, selectedPubkey, onSelect, disabled }: Peer
               ) : (
                 peers.map((peer) => (
                   <button
-                    key={peer.pubkey}
+                    key={peer.peer_id}
                     onClick={() => {
-                      onSelect(peer.pubkey);
+                      onSelect(peer.peer_id);
                       setIsOpen(false);
                     }}
                     className={`w-full px-3 py-2.5 text-left transition-colors hover:bg-fiber-accent/10 ${
-                      peer.pubkey === selectedPubkey ? 'bg-fiber-accent/20' : ''
+                      peer.peer_id === selectedPeerId ? 'bg-fiber-accent/20' : ''
                     }`}
                   >
                     <div className="flex items-center gap-2">
                       <div
                         className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                          peer.pubkey === selectedPubkey ? 'bg-fiber-accent' : 'bg-fiber-muted'
+                          peer.peer_id === selectedPeerId ? 'bg-fiber-accent' : 'bg-fiber-muted'
                         }`}
                       />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-mono text-white truncate">
-                          {truncatePubkey(peer.pubkey)}
+                          {displayLabel(peer)}
                         </p>
                         <p className="text-[10px] text-fiber-muted truncate">
-                          {truncatePeerId(peer.peer_id)}
+                          {truncateId(peer.peer_id, 12, 4)}
                         </p>
                       </div>
                     </div>

@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@fiber-pay/sdk':
+        specifier: file:../fiber-pay/packages/sdk
+        version: file:../fiber-pay/packages/sdk
       motion:
         specifier: ^12.4.7
         version: 12.33.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -101,6 +104,10 @@ packages:
   '@eslint/plugin-kit@0.4.1':
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  '@fiber-pay/sdk@file:../fiber-pay/packages/sdk':
+    resolution: {directory: ../fiber-pay/packages/sdk, type: directory}
+    engines: {node: '>=18'}
 
   '@humanfs/core@0.19.1':
     resolution: {integrity: sha512-5DyQ4+1JEUzejeK1JGICcideyfUbGixgS9jNgex5nqkW+cY7WZhxBigmieN5Qnw9ZosSNVC9KQKyb+GUaGyKUA==}
@@ -1829,6 +1836,9 @@ packages:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
 
+  zod@4.3.6:
+    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+
 snapshots:
 
   '@alloc/quick-lru@5.2.0': {}
@@ -1894,6 +1904,10 @@ snapshots:
     dependencies:
       '@eslint/core': 0.17.0
       levn: 0.4.1
+
+  '@fiber-pay/sdk@file:../fiber-pay/packages/sdk':
+    dependencies:
+      zod: 4.3.6
 
   '@humanfs/core@0.19.1': {}
 
@@ -3839,3 +3853,5 @@ snapshots:
   word-wrap@1.2.5: {}
 
   yocto-queue@0.1.0: {}
+
+  zod@4.3.6: {}

@@ -31,19 +31,30 @@ const DEFAULT_RECIPIENT_PUBKEY = '0291a6576bd5a94bd74b27080a48340875338fff9f6d63
 export default function Home() {
   const [rpcUrl, setRpcUrl] = useState(DEFAULT_RPC_URL);
   const [recipientPubkey, setRecipientPubkey] = useState(DEFAULT_RECIPIENT_PUBKEY);
+  const [recipientPeerId, setRecipientPeerId] = useState('');
   const [showSettings, setShowSettings] = useState(false);
 
   const fiberNode = useFiberNode(rpcUrl);
 
-  // Auto-select first peer if connected and no recipient selected
+  // When user selects a peer from PeerSelector, update both peer_id and pubkey
+  const handlePeerSelect = (peerId: string) => {
+    setRecipientPeerId(peerId);
+    const peer = fiberNode.peers.find((p) => p.peer_id === peerId);
+    if (peer?.pubkey) {
+      setRecipientPubkey(peer.pubkey);
+    }
+  };
+
+  // Auto-select first peer if connected and no peer selected
   useEffect(() => {
-    if (fiberNode.isConnected && fiberNode.peers.length > 0) {
-      const currentPeerExists = fiberNode.peers.some((p) => p.pubkey === recipientPubkey);
-      if (!currentPeerExists) {
-        setRecipientPubkey(fiberNode.peers[0].pubkey);
+    if (fiberNode.isConnected && fiberNode.peers.length > 0 && !recipientPeerId) {
+      const firstPeer = fiberNode.peers[0];
+      setRecipientPeerId(firstPeer.peer_id);
+      if (firstPeer.pubkey) {
+        setRecipientPubkey(firstPeer.pubkey);
       }
     }
-  }, [fiberNode.isConnected, fiberNode.peers, recipientPubkey]);
+  }, [fiberNode.isConnected, fiberNode.peers, recipientPeerId]);
 
   // For payment history, we need to track payments
   const payment = useStreamingPayment({
@@ -137,9 +148,12 @@ export default function Home() {
               onDisconnect={fiberNode.disconnect}
               channelStatus={fiberNode.channelStatus}
               channelError={fiberNode.channelError}
+              channelStateName={fiberNode.channelStateName}
+              channelElapsed={fiberNode.channelElapsed}
               availableBalance={fiberNode.availableBalance}
               onCheckRoute={() => fiberNode.checkPaymentRoute(recipientPubkey)}
-              onOpenChannel={() => fiberNode.setupChannel(recipientPubkey)}
+              onOpenChannel={() => fiberNode.setupChannel(recipientPeerId)}
+              onCancelSetup={fiberNode.cancelChannelSetup}
             />
 
             {/* Payment History */}
@@ -218,8 +232,8 @@ export default function Home() {
                 {fiberNode.isConnected && fiberNode.peers.length > 0 ? (
                   <PeerSelector
                     peers={fiberNode.peers}
-                    selectedPubkey={recipientPubkey}
-                    onSelect={setRecipientPubkey}
+                    selectedPeerId={recipientPeerId}
+                    onSelect={handlePeerSelect}
                   />
                 ) : (
                   <div>
