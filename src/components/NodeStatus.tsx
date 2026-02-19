@@ -2,17 +2,12 @@
 
 import { motion } from 'motion/react';
 import { ChannelStatus } from '@/hooks/use-fiber-node';
+import { NodeInfo, fromHex } from '@/lib/fiber-rpc';
 
 interface NodeStatusProps {
   isConnected: boolean;
   isConnecting: boolean;
-  nodeInfo: {
-    version: string;
-    public_key: string;
-    node_name: string | null;
-    open_channel_count: number;
-    peers_count: number;
-  } | null;
+  nodeInfo: NodeInfo | null;
   error: string | null;
   onConnect: () => void;
   onDisconnect: () => void;
@@ -148,7 +143,7 @@ export function NodeStatus({
                   Channels
                 </p>
                 <p className="text-xl font-display text-white">
-                  {nodeInfo.open_channel_count}
+                  {Number(fromHex(nodeInfo.channel_count))}
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-fiber-dark/50">
@@ -156,7 +151,7 @@ export function NodeStatus({
                   Peers
                 </p>
                 <p className="text-xl font-display text-white">
-                  {nodeInfo.peers_count}
+                  {Number(fromHex(nodeInfo.peers_count))}
                 </p>
               </div>
             </div>
@@ -166,7 +161,7 @@ export function NodeStatus({
                 Node ID
               </p>
               <p className="text-xs font-mono text-white/70 truncate">
-                {nodeInfo.public_key}
+                {nodeInfo.node_id}
               </p>
             </div>
 

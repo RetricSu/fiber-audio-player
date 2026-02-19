@@ -145,8 +145,8 @@ export class StreamingPaymentService {
   async checkPaymentRoute(amount: number): Promise<boolean> {
     try {
       const result = await this.client.sendPayment({
-        target_pubkey: this.config.recipientPubkey,
-        amount: toHex(ckbToShannon(amount)),
+        target_pubkey: this.config.recipientPubkey as `0x${string}`,
+        amount: toHex(ckbToShannon(amount)) as `0x${string}`,
         keysend: true,
         dry_run: true,
       });

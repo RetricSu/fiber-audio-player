@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { FiberRpcClient, NodeInfo, Channel, PeerInfo, toHex, ckbToShannon, formatShannon } from '@/lib/fiber-rpc';
+import { useState, useCallback, useRef } from 'react';
+import { FiberRpcClient, NodeInfo, Channel, PeerInfo, ChannelState, toHex, ckbToShannon, formatShannon } from '@/lib/fiber-rpc';
 
 export type ChannelStatus =
   | 'idle'
@@ -25,16 +25,9 @@ export interface UseFiberNodeResult {
   // Channel setup
   channelStatus: ChannelStatus;
   channelError: string | null;
-  channelStateName: string | null;
-  channelElapsed: number;
   availableBalance: string;
   checkPaymentRoute: (recipientPubkey: string, amount?: number) => Promise<boolean>;
-  setupChannel: (peerId: string, fundingAmountCkb?: number) => Promise<boolean>;
-  cancelChannelSetup: () => void;
-  // Peer connection
-  connectToPeer: (address: string) => Promise<PeerInfo | null>;
-  isConnectingPeer: boolean;
-  connectPeerError: string | null;
+  setupChannel: (recipientPubkey: string, fundingAmountCkb?: number) => Promise<boolean>;
 }
 
 const DEFAULT_FUNDING_AMOUNT_CKB = 100; // 100 CKB default funding
@@ -51,16 +44,7 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
   // Channel status
   const [channelStatus, setChannelStatus] = useState<ChannelStatus>('idle');
   const [channelError, setChannelError] = useState<string | null>(null);
-  const [channelStateName, setChannelStateName] = useState<string | null>(null);
-  const [channelElapsed, setChannelElapsed] = useState(0);
   const [availableBalance, setAvailableBalance] = useState('0');
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const cancelledRef = useRef(false);
-
-  // Peer connection state
-  const [isConnectingPeer, setIsConnectingPeer] = useState(false);
-  const [connectPeerError, setConnectPeerError] = useState<string | null>(null);
 
   const connect = useCallback(async () => {
     setIsConnecting(true);
@@ -70,7 +54,7 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
       const client = new FiberRpcClient({ url: rpcUrl, timeout: 10000 });
       clientRef.current = client;
 
-      const info = await client.getNodeInfo();
+      const info = await client.nodeInfo();
       setNodeInfo(info);
 
       const channelResult = await client.listChannels();
@@ -89,11 +73,6 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
   }, [rpcUrl]);
 
   const disconnect = useCallback(() => {
-    // Clean up any active polling
-    if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
-    if (elapsedRef.current) { clearInterval(elapsedRef.current); elapsedRef.current = null; }
-    cancelledRef.current = true;
-
     clientRef.current = null;
     setIsConnected(false);
     setNodeInfo(null);
@@ -102,8 +81,6 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
     setError(null);
     setChannelStatus('idle');
     setChannelError(null);
-    setChannelStateName(null);
-    setChannelElapsed(0);
     setAvailableBalance('0');
   }, []);
 
@@ -111,7 +88,7 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
     if (!clientRef.current) return;
 
     try {
-      const info = await clientRef.current.getNodeInfo();
+      const info = await clientRef.current.nodeInfo();
       setNodeInfo(info);
 
       const channelResult = await clientRef.current.listChannels();
@@ -121,35 +98,6 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
       setPeers(peersResult.peers || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh');
-    }
-  }, []);
-
-  const connectToPeer = useCallback(async (address: string): Promise<PeerInfo | null> => {
-    if (!clientRef.current) {
-      setConnectPeerError('Not connected to Fiber node');
-      return null;
-    }
-
-    setIsConnectingPeer(true);
-    setConnectPeerError(null);
-
-    try {
-      await clientRef.current.connectPeer(address);
-
-      // Refresh peers list
-      const peersResult = await clientRef.current.listPeers();
-      const updatedPeers = peersResult.peers || [];
-      setPeers(updatedPeers);
-
-      // Return the most recently added peer (last in list)
-      const newPeer = updatedPeers[updatedPeers.length - 1] ?? null;
-      return newPeer;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to connect to peer';
-      setConnectPeerError(msg);
-      return null;
-    } finally {
-      setIsConnectingPeer(false);
     }
   }, []);
 
@@ -172,12 +120,18 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
         const canRoute = await client.checkPaymentRoute(recipientPubkey, testAmount);
 
         if (canRoute) {
-          // Check our total channel balance across all ready channels
-          const allChannels = await client.listChannels();
-          const totalBalance = allChannels.channels
-            .filter((ch) => ch.state.state_name === 'ChannelReady')
-            .reduce((sum, ch) => sum + BigInt(ch.local_balance), 0n);
-          setAvailableBalance(formatShannon(totalBalance));
+          // Check for direct channel to get balance info
+          const directChannel = await client.findChannelToPeer(recipientPubkey);
+          if (directChannel) {
+            setAvailableBalance(formatShannon(directChannel.local_balance));
+          } else {
+            // Route exists via network, check our total channel balance
+            const allChannels = await client.listChannels();
+            const totalBalance = allChannels.channels
+              .filter((ch) => ch.state.state_name === ChannelState.ChannelReady)
+              .reduce((sum, ch) => sum + BigInt(ch.local_balance), 0n);
+            setAvailableBalance(formatShannon(totalBalance));
+          }
           setChannelStatus('ready');
           return true;
         }
@@ -198,138 +152,78 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
     []
   );
 
-  const cancelChannelSetup = useCallback(() => {
-    cancelledRef.current = true;
-    if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
-    if (elapsedRef.current) { clearInterval(elapsedRef.current); elapsedRef.current = null; }
-    setChannelStatus('idle');
-    setChannelStateName(null);
-    setChannelElapsed(0);
-    setChannelError(null);
-  }, []);
-
   const setupChannel = useCallback(
-    async (peerId: string, fundingAmountCkb: number = DEFAULT_FUNDING_AMOUNT_CKB): Promise<boolean> => {
+    async (recipientPubkey: string, fundingAmountCkb: number = DEFAULT_FUNDING_AMOUNT_CKB): Promise<boolean> => {
       if (!clientRef.current) {
         setChannelError('Not connected to Fiber node');
         setChannelStatus('error');
         return false;
       }
 
-      // Clean up any previous polling
-      if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
-      if (elapsedRef.current) { clearInterval(elapsedRef.current); elapsedRef.current = null; }
-      cancelledRef.current = false;
-
       setChannelStatus('opening_channel');
       setChannelError(null);
-      setChannelStateName(null);
-      setChannelElapsed(0);
 
       try {
         const client = clientRef.current;
         const fundingAmount = toHex(ckbToShannon(fundingAmountCkb));
 
-        // Open channel directly with peer_id
-        await client.openChannel({
-          peer_id: peerId,
-          funding_amount: fundingAmount,
-          public: true,
-        });
+        // Find the peer_id for this pubkey and open channel
+        await client.openChannelByPubkey(recipientPubkey, fundingAmount, { public: true });
 
-        // Channel opened — now poll for it to become ready
+        // Wait for channel to become ready
         setChannelStatus('waiting_confirmation');
 
-        // Start elapsed timer
-        const startTime = Date.now();
-        elapsedRef.current = setInterval(() => {
-          setChannelElapsed(Math.floor((Date.now() - startTime) / 1000));
-        }, 1000);
+        // We need to find the peer_id to poll for channel status
+        const peerId = await client.findPeerIdByPubkey(recipientPubkey);
+        if (!peerId) {
+          throw new Error('Lost connection to peer');
+        }
 
-        // Start non-blocking polling using peerId directly
-        return new Promise<boolean>((resolve) => {
-          let attempts = 0;
-          const maxAttempts = 200; // ~10 minutes at 3s intervals
-          const pollInterval = 3000;
+        // Poll for channel status (check every 3 seconds, up to 5 minutes)
+        const maxAttempts = 100;
+        const pollInterval = 3000;
 
-          const poll = async () => {
-            if (cancelledRef.current || !clientRef.current) {
-              cleanup();
-              resolve(false);
-              return;
-            }
+        for (let i = 0; i < maxAttempts; i++) {
+          await new Promise((resolve) => setTimeout(resolve, pollInterval));
 
-            attempts++;
+          const channelResult = await client.listChannels({ peer_id: peerId });
+          const readyChannel = channelResult.channels.find(
+            (ch) => ch.state.state_name === ChannelState.ChannelReady
+          );
 
-            try {
-              const channelResult = await clientRef.current.listChannels({ peer_id: peerId });
-              const channels = channelResult.channels || [];
+          if (readyChannel) {
+            setAvailableBalance(formatShannon(readyChannel.local_balance));
+            setChannelStatus('ready');
 
-              // Find the latest channel for this peer
-              const latestChannel = channels[channels.length - 1];
-              if (latestChannel) {
-                const currentState = latestChannel.state.state_name;
-                setChannelStateName(currentState);
+            // Refresh channels list
+            const allChannels = await client.listChannels();
+            setChannels(allChannels.channels || []);
 
-                if (currentState === 'ChannelReady') {
-                  setAvailableBalance(formatShannon(latestChannel.local_balance));
-                  setChannelStatus('ready');
-                  setChannelStateName(null);
+            return true;
+          }
 
-                  // Refresh channels list
-                  const allChannels = await clientRef.current!.listChannels();
-                  setChannels(allChannels.channels || []);
+          // Check for failed/closed channel
+          const failedChannel = channelResult.channels.find(
+            (ch) => ch.state.state_name === ChannelState.Closed
+          );
+          if (failedChannel) {
+            throw new Error('Channel was closed unexpectedly');
+          }
+        }
 
-                  cleanup();
-                  resolve(true);
-                  return;
-                }
-
-                if (currentState === 'Closed') {
-                  setChannelError('Channel was closed unexpectedly');
-                  setChannelStatus('error');
-                  setChannelStateName(null);
-                  cleanup();
-                  resolve(false);
-                  return;
-                }
-              }
-            } catch (err) {
-              console.warn('[fiber] polling error:', err);
-              // Non-fatal — keep trying
-            }
-
-            if (attempts >= maxAttempts) {
-              setChannelError(
-                'Channel opening timed out. It may still be pending on-chain — try checking the route again in a minute.'
-              );
-              setChannelStatus('error');
-              setChannelStateName(null);
-              cleanup();
-              resolve(false);
-            }
-          };
-
-          const cleanup = () => {
-            if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
-            if (elapsedRef.current) { clearInterval(elapsedRef.current); elapsedRef.current = null; }
-          };
-
-          // First poll immediately, then on interval
-          poll();
-          pollingRef.current = setInterval(poll, pollInterval);
-        });
+        throw new Error('Channel opening timed out. The channel may still be pending on-chain confirmation.');
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : 'Unknown error';
 
+        // Provide helpful error messages
         if (errMsg.includes('peer') || errMsg.includes('connect') || errMsg.includes('not found')) {
           setChannelError(
-            'Cannot open channel: Peer not connected. The recipient node may be offline or unreachable. ' +
-            'Try connecting to the peer first using their full address.'
+            `Cannot open channel: Peer not connected. The recipient node may be offline or unreachable. ` +
+            `Try connecting to the peer first using their full address.`
           );
         } else if (errMsg.includes('insufficient') || errMsg.includes('balance') || errMsg.includes('fund')) {
           setChannelError(
-            'Cannot open channel: Insufficient funds. Make sure your node has enough CKB to fund the channel.'
+            `Cannot open channel: Insufficient funds. Make sure your node has enough CKB to fund the channel.`
           );
         } else {
           setChannelError(`Failed to open channel: ${errMsg}`);
@@ -341,14 +235,6 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
     },
     []
   );
-
-  // Clean up on unmount
-  useEffect(() => {
-    return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
-      if (elapsedRef.current) clearInterval(elapsedRef.current);
-    };
-  }, []);
 
   return {
     isConnected,
@@ -362,14 +248,8 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
     refresh,
     channelStatus,
     channelError,
-    channelStateName,
-    channelElapsed,
     availableBalance,
     checkPaymentRoute,
     setupChannel,
-    cancelChannelSetup,
-    connectToPeer,
-    isConnectingPeer,
-    connectPeerError,
   };
 }
