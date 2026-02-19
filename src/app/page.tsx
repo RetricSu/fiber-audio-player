@@ -25,7 +25,7 @@ const DEMO_EPISODE = {
 };
 
 // Default configuration
-const DEFAULT_RPC_URL = 'http://127.0.0.1:28227';
+const DEFAULT_RPC_URL = 'http://127.0.0.1:8229';
 const DEFAULT_RECIPIENT_PUBKEY = '0291a6576bd5a94bd74b27080a48340875338fff9f6d6361fe6b8db8d0d1912fcc';
 
 export default function Home() {
@@ -225,7 +225,7 @@ export default function Home() {
                     value={rpcUrl}
                     onChange={(e) => setRpcUrl(e.target.value)}
                     className="w-full px-3 py-2 bg-fiber-dark border border-fiber-border rounded-lg text-sm font-mono text-white focus:outline-none focus:border-fiber-accent/50 transition-colors"
-                    placeholder="http://127.0.0.1:8227"
+                    placeholder="http://127.0.0.1:8229"
                   />
                 </div>
 

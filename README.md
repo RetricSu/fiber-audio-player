@@ -51,7 +51,7 @@ The demo supports two modes:
 2. **Live Mode**: Connects to a real Fiber node and sends actual payments
 
 Configure in the Settings panel:
-- **Fiber RPC URL**: Your local Fiber node endpoint (default: `http://127.0.0.1:8227`)
+- **Fiber RPC URL**: Your local Fiber node endpoint (default: `http://127.0.0.1:8229`)
 - **Recipient Public Key**: The public key receiving payments
 
 ## Fiber Network RPC Integration

@@ -18,6 +18,8 @@ export interface UseFiberNodeResult {
   nodeInfo: NodeInfo | null;
   channels: Channel[];
   peers: PeerInfo[];
+  isConnectingPeer: boolean;
+  connectPeerError: string | null;
   error: string | null;
   connect: () => Promise<void>;
   disconnect: () => void;
@@ -25,9 +27,13 @@ export interface UseFiberNodeResult {
   // Channel setup
   channelStatus: ChannelStatus;
   channelError: string | null;
+  channelStateName: string | null;
+  channelElapsed: number;
   availableBalance: string;
+  connectToPeer: (address: string) => Promise<PeerInfo | null>;
   checkPaymentRoute: (recipientPubkey: string, amount?: number) => Promise<boolean>;
   setupChannel: (recipientPubkey: string, fundingAmountCkb?: number) => Promise<boolean>;
+  cancelChannelSetup: () => void;
 }
 
 const DEFAULT_FUNDING_AMOUNT_CKB = 100; // 100 CKB default funding
@@ -38,13 +44,35 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
   const [nodeInfo, setNodeInfo] = useState<NodeInfo | null>(null);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [peers, setPeers] = useState<PeerInfo[]>([]);
+  const [isConnectingPeer, setIsConnectingPeer] = useState(false);
+  const [connectPeerError, setConnectPeerError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const clientRef = useRef<FiberRpcClient | null>(null);
 
   // Channel status
   const [channelStatus, setChannelStatus] = useState<ChannelStatus>('idle');
   const [channelError, setChannelError] = useState<string | null>(null);
+  const [channelStateName, setChannelStateName] = useState<string | null>(null);
+  const [channelElapsed, setChannelElapsed] = useState(0);
   const [availableBalance, setAvailableBalance] = useState('0');
+  const channelSetupCanceledRef = useRef(false);
+  const channelTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const clearChannelTimer = useCallback(() => {
+    if (channelTimerRef.current) {
+      clearInterval(channelTimerRef.current);
+      channelTimerRef.current = null;
+    }
+  }, []);
+
+  const startChannelTimer = useCallback(() => {
+    clearChannelTimer();
+    setChannelElapsed(0);
+    const startedAt = Date.now();
+    channelTimerRef.current = setInterval(() => {
+      setChannelElapsed(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+  }, [clearChannelTimer]);
 
   const connect = useCallback(async () => {
     setIsConnecting(true);
@@ -62,6 +90,7 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
 
       const peersResult = await client.listPeers();
       setPeers(peersResult.peers || []);
+      setConnectPeerError(null);
 
       setIsConnected(true);
     } catch (err) {
@@ -78,11 +107,17 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
     setNodeInfo(null);
     setChannels([]);
     setPeers([]);
+    setIsConnectingPeer(false);
+    setConnectPeerError(null);
     setError(null);
     setChannelStatus('idle');
     setChannelError(null);
+    setChannelStateName(null);
+    setChannelElapsed(0);
+    channelSetupCanceledRef.current = false;
+    clearChannelTimer();
     setAvailableBalance('0');
-  }, []);
+  }, [clearChannelTimer]);
 
   const refresh = useCallback(async () => {
     if (!clientRef.current) return;
@@ -101,6 +136,55 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
     }
   }, []);
 
+  const connectToPeer = useCallback(async (address: string): Promise<PeerInfo | null> => {
+    if (!clientRef.current) {
+      setConnectPeerError('Not connected to Fiber node');
+      return null;
+    }
+
+    const trimmedAddress = address.trim();
+    if (!trimmedAddress) {
+      setConnectPeerError('Peer address is required');
+      return null;
+    }
+
+    setIsConnectingPeer(true);
+    setConnectPeerError(null);
+
+    try {
+      const client = clientRef.current as FiberRpcClient & {
+        connectPeer?: (args: { address: string } | string) => Promise<unknown>;
+      };
+
+      if (!client.connectPeer) {
+        throw new Error('Current Fiber RPC client does not support peer connections');
+      }
+
+      try {
+        await client.connectPeer({ address: trimmedAddress });
+      } catch {
+        await client.connectPeer(trimmedAddress);
+      }
+
+      const peersResult = await clientRef.current.listPeers();
+      const nextPeers = peersResult.peers || [];
+      setPeers(nextPeers);
+
+      const peerIdMatch = trimmedAddress.match(/\/p2p\/([^/]+)/);
+      const matchedPeer = peerIdMatch
+        ? nextPeers.find((peer) => peer.peer_id === peerIdMatch[1])
+        : undefined;
+
+      return matchedPeer || nextPeers[nextPeers.length - 1] || null;
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : 'Failed to connect to peer';
+      setConnectPeerError(errMsg);
+      return null;
+    } finally {
+      setIsConnectingPeer(false);
+    }
+  }, []);
+
   const checkPaymentRoute = useCallback(
     async (recipientPubkey: string, amount: number = 0.01): Promise<boolean> => {
       if (!clientRef.current) {
@@ -111,6 +195,9 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
 
       setChannelStatus('checking');
       setChannelError(null);
+      setChannelStateName(null);
+      setChannelElapsed(0);
+      clearChannelTimer();
 
       try {
         const client = clientRef.current;
@@ -149,8 +236,17 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
         return false;
       }
     },
-    []
+    [clearChannelTimer]
   );
+
+  const cancelChannelSetup = useCallback(() => {
+    channelSetupCanceledRef.current = true;
+    clearChannelTimer();
+    setChannelStatus('idle');
+    setChannelError(null);
+    setChannelStateName(null);
+    setChannelElapsed(0);
+  }, [clearChannelTimer]);
 
   const setupChannel = useCallback(
     async (recipientPubkey: string, fundingAmountCkb: number = DEFAULT_FUNDING_AMOUNT_CKB): Promise<boolean> => {
@@ -162,6 +258,10 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
 
       setChannelStatus('opening_channel');
       setChannelError(null);
+      setChannelStateName(null);
+      setChannelElapsed(0);
+      channelSetupCanceledRef.current = false;
+      clearChannelTimer();
 
       try {
         const client = clientRef.current;
@@ -172,6 +272,7 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
 
         // Wait for channel to become ready
         setChannelStatus('waiting_confirmation');
+        startChannelTimer();
 
         // We need to find the peer_id to poll for channel status
         const peerId = await client.findPeerIdByPubkey(recipientPubkey);
@@ -184,15 +285,30 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
         const pollInterval = 3000;
 
         for (let i = 0; i < maxAttempts; i++) {
+          if (channelSetupCanceledRef.current) {
+            clearChannelTimer();
+            setChannelStatus('idle');
+            setChannelStateName(null);
+            setChannelElapsed(0);
+            return false;
+          }
+
           await new Promise((resolve) => setTimeout(resolve, pollInterval));
 
           const channelResult = await client.listChannels({ peer_id: peerId });
+          const activeChannel = channelResult.channels[0];
+          if (activeChannel?.state?.state_name) {
+            setChannelStateName(activeChannel.state.state_name);
+          }
+
           const readyChannel = channelResult.channels.find(
             (ch) => ch.state.state_name === ChannelState.ChannelReady
           );
 
           if (readyChannel) {
+            clearChannelTimer();
             setAvailableBalance(formatShannon(readyChannel.local_balance));
+            setChannelStateName(readyChannel.state.state_name);
             setChannelStatus('ready');
 
             // Refresh channels list
@@ -207,12 +323,14 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
             (ch) => ch.state.state_name === ChannelState.Closed
           );
           if (failedChannel) {
+            setChannelStateName(failedChannel.state.state_name);
             throw new Error('Channel was closed unexpectedly');
           }
         }
 
         throw new Error('Channel opening timed out. The channel may still be pending on-chain confirmation.');
       } catch (err) {
+        clearChannelTimer();
         const errMsg = err instanceof Error ? err.message : 'Unknown error';
 
         // Provide helpful error messages
@@ -233,7 +351,7 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
         return false;
       }
     },
-    []
+    [clearChannelTimer, startChannelTimer]
   );
 
   return {
@@ -242,14 +360,20 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
     nodeInfo,
     channels,
     peers,
+    isConnectingPeer,
+    connectPeerError,
     error,
     connect,
     disconnect,
     refresh,
     channelStatus,
     channelError,
+    channelStateName,
+    channelElapsed,
     availableBalance,
+    connectToPeer,
     checkPaymentRoute,
     setupChannel,
+    cancelChannelSetup,
   };
 }
