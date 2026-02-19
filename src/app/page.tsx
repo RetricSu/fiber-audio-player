@@ -33,6 +33,7 @@ export default function Home() {
   const [recipientPubkey, setRecipientPubkey] = useState(DEFAULT_RECIPIENT_PUBKEY);
   const [recipientPeerId, setRecipientPeerId] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+  const [peerAddress, setPeerAddress] = useState('');
 
   const fiberNode = useFiberNode(rpcUrl);
 
@@ -250,6 +251,44 @@ export default function Home() {
                     {fiberNode.isConnected && fiberNode.peers.length === 0 && (
                       <p className="text-[10px] text-fiber-warning mt-1">
                         No peers connected. Connect to peers first.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Connect to new peer */}
+                {fiberNode.isConnected && (
+                  <div>
+                    <label className="block text-xs text-fiber-muted mb-2 font-mono uppercase tracking-wider">
+                      Connect to Peer
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={peerAddress}
+                        onChange={(e) => setPeerAddress(e.target.value)}
+                        className="flex-1 min-w-0 px-3 py-2 bg-fiber-dark border border-fiber-border rounded-lg text-sm font-mono text-white focus:outline-none focus:border-fiber-accent/50 transition-colors"
+                        placeholder="/ip4/127.0.0.1/tcp/8228/p2p/Qm..."
+                        disabled={fiberNode.isConnectingPeer}
+                      />
+                      <button
+                        onClick={async () => {
+                          if (!peerAddress.trim()) return;
+                          const peer = await fiberNode.connectToPeer(peerAddress.trim());
+                          if (peer) {
+                            setPeerAddress('');
+                            handlePeerSelect(peer.peer_id);
+                          }
+                        }}
+                        disabled={fiberNode.isConnectingPeer || !peerAddress.trim()}
+                        className="px-4 py-2 bg-fiber-accent/20 text-fiber-accent border border-fiber-accent/30 rounded-lg text-sm font-mono hover:bg-fiber-accent/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                      >
+                        {fiberNode.isConnectingPeer ? 'Connecting...' : 'Connect'}
+                      </button>
+                    </div>
+                    {fiberNode.connectPeerError && (
+                      <p className="text-[10px] text-red-400 mt-1">
+                        {fiberNode.connectPeerError}
                       </p>
                     )}
                   </div>

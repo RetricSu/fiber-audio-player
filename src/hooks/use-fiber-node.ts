@@ -31,6 +31,10 @@ export interface UseFiberNodeResult {
   checkPaymentRoute: (recipientPubkey: string, amount?: number) => Promise<boolean>;
   setupChannel: (peerId: string, fundingAmountCkb?: number) => Promise<boolean>;
   cancelChannelSetup: () => void;
+  // Peer connection
+  connectToPeer: (address: string) => Promise<PeerInfo | null>;
+  isConnectingPeer: boolean;
+  connectPeerError: string | null;
 }
 
 const DEFAULT_FUNDING_AMOUNT_CKB = 100; // 100 CKB default funding
@@ -53,6 +57,10 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const cancelledRef = useRef(false);
+
+  // Peer connection state
+  const [isConnectingPeer, setIsConnectingPeer] = useState(false);
+  const [connectPeerError, setConnectPeerError] = useState<string | null>(null);
 
   const connect = useCallback(async () => {
     setIsConnecting(true);
@@ -113,6 +121,35 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
       setPeers(peersResult.peers || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh');
+    }
+  }, []);
+
+  const connectToPeer = useCallback(async (address: string): Promise<PeerInfo | null> => {
+    if (!clientRef.current) {
+      setConnectPeerError('Not connected to Fiber node');
+      return null;
+    }
+
+    setIsConnectingPeer(true);
+    setConnectPeerError(null);
+
+    try {
+      await clientRef.current.connectPeer(address);
+
+      // Refresh peers list
+      const peersResult = await clientRef.current.listPeers();
+      const updatedPeers = peersResult.peers || [];
+      setPeers(updatedPeers);
+
+      // Return the most recently added peer (last in list)
+      const newPeer = updatedPeers[updatedPeers.length - 1] ?? null;
+      return newPeer;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to connect to peer';
+      setConnectPeerError(msg);
+      return null;
+    } finally {
+      setIsConnectingPeer(false);
     }
   }, []);
 
@@ -331,5 +368,8 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
     checkPaymentRoute,
     setupChannel,
     cancelChannelSetup,
+    connectToPeer,
+    isConnectingPeer,
+    connectPeerError,
   };
 }
