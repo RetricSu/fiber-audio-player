@@ -129,6 +129,8 @@ export default function Home() {
               episode={DEMO_EPISODE}
               rpcUrl={rpcUrl}
               recipientPubkey={recipientPubkey}
+              isFiberConnected={fiberNode.isConnected}
+              isRouteReady={fiberNode.channelStatus === 'ready'}
             />
           </motion.div>
 

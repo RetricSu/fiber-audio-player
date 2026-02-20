@@ -14,7 +14,7 @@ export interface UseStreamingPaymentResult {
   lastPayment: PaymentTick | null;
   paymentHistory: PaymentTick[];
   error: string | null;
-  start: () => Promise<void>;
+  start: () => Promise<boolean>;
   stop: () => Promise<void>;
 }
 
@@ -48,14 +48,17 @@ export function useStreamingPayment(
     };
   }, [config.rpcUrl, config.recipientPubkey, config.ratePerSecond]);
 
-  const start = useCallback(async () => {
-    if (!serviceRef.current) return;
+  const start = useCallback(async (): Promise<boolean> => {
+    if (!serviceRef.current) return false;
     setError(null);
     try {
       await serviceRef.current.startStreaming();
       setIsStreaming(true);
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start payment stream');
+      setIsStreaming(false);
+      return false;
     }
   }, []);
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAudioPlayer } from '@/hooks/use-audio-player';
 import { useStreamingPayment } from '@/hooks/use-streaming-payment';
@@ -22,6 +22,8 @@ interface AudioPlayerProps {
   episode: Episode;
   rpcUrl: string;
   recipientPubkey: string;
+  isFiberConnected: boolean;
+  isRouteReady: boolean;
 }
 
 function formatTime(seconds: number): string {
@@ -35,9 +37,13 @@ export function AudioPlayer({
   episode,
   rpcUrl,
   recipientPubkey,
+  isFiberConnected,
+  isRouteReady,
 }: AudioPlayerProps) {
   const [volume, setVolumeState] = useState(0.8);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+  const [playbackGuardError, setPlaybackGuardError] = useState<string | null>(null);
+  const wasPlayingRef = useRef(false);
 
   const audio = useAudioPlayer(episode.audioUrl);
   const payment = useStreamingPayment({
@@ -47,22 +53,50 @@ export function AudioPlayer({
     paymentIntervalMs: 1000,
   });
 
-  // Sync payment streaming with playback
+  // Ensure payment stream is stopped when playback actually transitions from playing to stopped.
+  // This avoids stopping during startup while waiting for the audio play event.
   useEffect(() => {
-    if (audio.isPlaying) {
-      payment.start();
-    } else {
+    if (wasPlayingRef.current && !audio.isPlaying && payment.isStreaming) {
       payment.stop();
     }
-  }, [audio.isPlaying]);
+    wasPlayingRef.current = audio.isPlaying;
+  }, [audio.isPlaying, payment.isStreaming, payment]);
 
-  const handlePlayPause = useCallback(() => {
+  // Stop playback if payment stream fails while playing
+  useEffect(() => {
+    if (audio.isPlaying && payment.error) {
+      audio.pause();
+      payment.stop();
+      setPlaybackGuardError(payment.error);
+    }
+  }, [audio, payment]);
+
+  const handlePlayPause = useCallback(async () => {
     if (audio.isPlaying) {
       audio.pause();
+      await payment.stop();
     } else {
-      audio.play();
+      if (!isFiberConnected) {
+        setPlaybackGuardError('Fiber node is not connected. Connect your node before playing.');
+        return;
+      }
+
+      if (!isRouteReady) {
+        setPlaybackGuardError('No payment route available. Click "Check Route" before playing.');
+        return;
+      }
+
+      setPlaybackGuardError(null);
+
+      const started = await payment.start();
+      if (!started) {
+        setPlaybackGuardError(payment.error || 'Unable to start payment stream.');
+        return;
+      }
+
+      await audio.play();
     }
-  }, [audio]);
+  }, [audio, isFiberConnected, isRouteReady, payment]);
 
   const handleSeek = useCallback(
     (progress: number) => {
@@ -82,6 +116,8 @@ export function AudioPlayer({
   );
 
   const progress = audio.duration > 0 ? audio.currentTime / audio.duration : 0;
+  const canStartPlayback = isFiberConnected && isRouteReady;
+  const isPlayButtonDisabled = audio.isLoading || (!audio.isPlaying && !canStartPlayback);
 
   return (
     <div className="relative">
@@ -212,10 +248,17 @@ export function AudioPlayer({
             {/* Play/Pause */}
             <motion.button
               onClick={handlePlayPause}
-              className="relative w-16 h-16 rounded-full bg-fiber-accent flex items-center justify-center shadow-lg shadow-fiber-accent/30"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              disabled={audio.isLoading}
+              className="relative w-16 h-16 rounded-full bg-fiber-accent flex items-center justify-center shadow-lg shadow-fiber-accent/30 disabled:opacity-50 disabled:cursor-not-allowed"
+              whileHover={isPlayButtonDisabled ? undefined : { scale: 1.05 }}
+              whileTap={isPlayButtonDisabled ? undefined : { scale: 0.95 }}
+              disabled={isPlayButtonDisabled}
+              title={
+                !isFiberConnected
+                  ? 'Connect Fiber node first'
+                  : !isRouteReady
+                  ? 'Check route before playing'
+                  : undefined
+              }
             >
               {audio.isLoading ? (
                 <motion.div
@@ -325,14 +368,14 @@ export function AudioPlayer({
 
       {/* Payment error */}
       <AnimatePresence>
-        {payment.error && (
+        {(playbackGuardError || payment.error) && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
             className="mt-4 p-4 rounded-xl bg-red-500/10 border border-red-500/30"
           >
-            <p className="text-sm text-red-400 font-mono">{payment.error}</p>
+            <p className="text-sm text-red-400 font-mono">{playbackGuardError || payment.error}</p>
           </motion.div>
         )}
       </AnimatePresence>
