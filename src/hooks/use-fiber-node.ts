@@ -203,22 +203,29 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
         const client = clientRef.current;
         const testAmount = toHex(ckbToShannon(amount));
 
+        // First check for direct ready channel to this recipient.
+        // This avoids false negatives when dry-run behavior differs by runtime/proxy mode.
+        const recipientPeerId = await client.findPeerIdByPubkey(recipientPubkey);
+        const directChannel = recipientPeerId
+          ? await client.findChannelToPeer(recipientPeerId)
+          : null;
+
+        if (directChannel) {
+          setAvailableBalance(formatShannon(directChannel.local_balance));
+          setChannelStatus('ready');
+          return true;
+        }
+
         // Check if we can route payments to this recipient
         const canRoute = await client.checkPaymentRoute(recipientPubkey, testAmount);
 
         if (canRoute) {
-          // Check for direct channel to get balance info
-          const directChannel = await client.findChannelToPeer(recipientPubkey);
-          if (directChannel) {
-            setAvailableBalance(formatShannon(directChannel.local_balance));
-          } else {
-            // Route exists via network, check our total channel balance
-            const allChannels = await client.listChannels();
-            const totalBalance = allChannels.channels
-              .filter((ch) => ch.state.state_name === ChannelState.ChannelReady)
-              .reduce((sum, ch) => sum + BigInt(ch.local_balance), 0n);
-            setAvailableBalance(formatShannon(totalBalance));
-          }
+          // Route exists via network, check our total channel balance
+          const allChannels = await client.listChannels();
+          const totalBalance = allChannels.channels
+            .filter((ch) => ch.state.state_name === ChannelState.ChannelReady)
+            .reduce((sum, ch) => sum + BigInt(ch.local_balance), 0n);
+          setAvailableBalance(formatShannon(totalBalance));
           setChannelStatus('ready');
           return true;
         }
@@ -267,6 +274,9 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
         const client = clientRef.current;
         const fundingAmount = toHex(ckbToShannon(fundingAmountCkb));
 
+        const channelsBefore = await client.listChannels();
+        const existingChannelIds = new Set(channelsBefore.channels.map((channel) => channel.channel_id));
+
         // Find the peer_id for this pubkey and open channel
         await client.openChannelByPubkey(recipientPubkey, fundingAmount, { public: true });
 
@@ -295,13 +305,23 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
 
           await new Promise((resolve) => setTimeout(resolve, pollInterval));
 
-          const channelResult = await client.listChannels({ peer_id: peerId });
-          const activeChannel = channelResult.channels[0];
+          const channelResult = await client.listChannels();
+          const peerChannels = channelResult.channels.filter((channel) => channel.peer_id === peerId);
+          const newPeerChannels = peerChannels.filter(
+            (channel) => !existingChannelIds.has(channel.channel_id)
+          );
+
+          const activeChannel =
+            newPeerChannels.find((channel) => channel.state.state_name !== ChannelState.ChannelReady) ||
+            newPeerChannels[newPeerChannels.length - 1] ||
+            peerChannels.find((channel) => channel.state.state_name !== ChannelState.ChannelReady) ||
+            peerChannels[peerChannels.length - 1];
+
           if (activeChannel?.state?.state_name) {
             setChannelStateName(activeChannel.state.state_name);
           }
 
-          const readyChannel = channelResult.channels.find(
+          const readyChannel = newPeerChannels.find(
             (ch) => ch.state.state_name === ChannelState.ChannelReady
           );
 
@@ -319,7 +339,7 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
           }
 
           // Check for failed/closed channel
-          const failedChannel = channelResult.channels.find(
+          const failedChannel = newPeerChannels.find(
             (ch) => ch.state.state_name === ChannelState.Closed
           );
           if (failedChannel) {
@@ -332,14 +352,15 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
       } catch (err) {
         clearChannelTimer();
         const errMsg = err instanceof Error ? err.message : 'Unknown error';
+        const normalizedError = errMsg.toLowerCase();
 
         // Provide helpful error messages
-        if (errMsg.includes('peer') || errMsg.includes('connect') || errMsg.includes('not found')) {
+        if (normalizedError.includes('peer not connected') || normalizedError.includes('not in your peer list')) {
           setChannelError(
             `Cannot open channel: Peer not connected. The recipient node may be offline or unreachable. ` +
             `Try connecting to the peer first using their full address.`
           );
-        } else if (errMsg.includes('insufficient') || errMsg.includes('balance') || errMsg.includes('fund')) {
+        } else if (normalizedError.includes('insufficient') || normalizedError.includes('balance') || normalizedError.includes('fund')) {
           setChannelError(
             `Cannot open channel: Insufficient funds. Make sure your node has enough CKB to fund the channel.`
           );

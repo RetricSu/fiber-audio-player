@@ -44,7 +44,7 @@ export function AudioPlayer({
     rpcUrl,
     recipientPubkey,
     ratePerSecond: episode.pricePerSecond,
-    paymentIntervalMs: 5000,
+    paymentIntervalMs: 1000,
   });
 
   // Sync payment streaming with playback

@@ -26,7 +26,7 @@ const DEMO_EPISODE = {
 
 // Default configuration
 const DEFAULT_RPC_URL = 'http://127.0.0.1:8229';
-const DEFAULT_RECIPIENT_PUBKEY = '0291a6576bd5a94bd74b27080a48340875338fff9f6d6361fe6b8db8d0d1912fcc';
+const DEFAULT_RECIPIENT_PUBKEY = '0306b8f3019325f33088e8cce835ac95f367167c9f11d73cf9dfbb923b54ba430d';
 
 export default function Home() {
   const [rpcUrl, setRpcUrl] = useState(DEFAULT_RPC_URL);
@@ -49,20 +49,20 @@ export default function Home() {
   // Auto-select first peer if connected and no peer selected
   useEffect(() => {
     if (fiberNode.isConnected && fiberNode.peers.length > 0 && !recipientPeerId) {
-      const firstPeer = fiberNode.peers[0];
-      setRecipientPeerId(firstPeer.peer_id);
-      if (firstPeer.pubkey) {
-        setRecipientPubkey(firstPeer.pubkey);
+      const preferredPeer = fiberNode.peers.find((peer) => peer.pubkey === recipientPubkey) || fiberNode.peers[0];
+      setRecipientPeerId(preferredPeer.peer_id);
+      if (!recipientPubkey && preferredPeer.pubkey) {
+        setRecipientPubkey(preferredPeer.pubkey);
       }
     }
-  }, [fiberNode.isConnected, fiberNode.peers, recipientPeerId]);
+  }, [fiberNode.isConnected, fiberNode.peers, recipientPeerId, recipientPubkey]);
 
   // For payment history, we need to track payments
   const payment = useStreamingPayment({
     rpcUrl,
     recipientPubkey,
     ratePerSecond: DEMO_EPISODE.pricePerSecond,
-    paymentIntervalMs: 5000,
+    paymentIntervalMs: 1000,
   });
 
   return (
@@ -153,7 +153,7 @@ export default function Home() {
               channelElapsed={fiberNode.channelElapsed}
               availableBalance={fiberNode.availableBalance}
               onCheckRoute={() => fiberNode.checkPaymentRoute(recipientPubkey)}
-              onOpenChannel={() => fiberNode.setupChannel(recipientPeerId)}
+              onOpenChannel={() => fiberNode.setupChannel(recipientPubkey)}
               onCancelSetup={fiberNode.cancelChannelSetup}
             />
 

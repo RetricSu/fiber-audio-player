@@ -49,10 +49,23 @@ export class FiberRpcClient extends SdkFiberRpcClient {
     super(config);
   }
 
+  private normalizePubkey(pubkey: string): string {
+    return pubkey.trim().replace(/^0x/i, '').toLowerCase();
+  }
+
+  private formatRpcPubkey(pubkey: string): string {
+    const normalized = this.normalizePubkey(pubkey);
+    if (!/^[0-9a-f]{66}$/.test(normalized)) {
+      throw new Error('Invalid recipient pubkey format. Expected 33-byte compressed secp256k1 pubkey hex.');
+    }
+    return normalized;
+  }
+
   // Find peer_id (Qm... format) by pubkey
   async findPeerIdByPubkey(pubkey: string): Promise<string | null> {
     const result = await this.listPeers();
-    const peer = result.peers.find((p) => p.pubkey === pubkey);
+    const targetPubkey = this.normalizePubkey(pubkey);
+    const peer = result.peers.find((p) => this.normalizePubkey(p.pubkey) === targetPubkey);
     return peer?.peer_id || null;
   }
 
@@ -87,23 +100,19 @@ export class FiberRpcClient extends SdkFiberRpcClient {
 
   // Check if payment route exists to target (uses dry_run)
   async checkPaymentRoute(targetPubkey: string, amount: string): Promise<boolean> {
-    try {
-      const result = await this.sendPayment({
-        target_pubkey: targetPubkey as `0x${string}`,
-        amount: amount as `0x${string}`,
-        keysend: true,
-        dry_run: true,
-      });
-      return result.status !== 'Failed';
-    } catch {
-      return false;
-    }
+    const result = await this.sendPayment({
+      target_pubkey: this.formatRpcPubkey(targetPubkey) as unknown as `0x${string}`,
+      amount: amount as `0x${string}`,
+      keysend: true,
+      dry_run: true,
+    });
+    return result.status !== 'Failed';
   }
 
   // Keysend payment (spontaneous payment without invoice)
   async keysend(targetPubkey: string, amount: string, customRecords?: Record<string, string>): Promise<{ payment_hash: string; status: string; failed_error?: string }> {
     return this.sendPayment({
-      target_pubkey: targetPubkey as `0x${string}`,
+      target_pubkey: this.formatRpcPubkey(targetPubkey) as unknown as `0x${string}`,
       amount: amount as `0x${string}`,
       keysend: true,
       custom_records: customRecords as Record<`0x${string}`, `0x${string}`> | undefined,

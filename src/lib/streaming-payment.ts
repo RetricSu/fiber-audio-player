@@ -3,6 +3,9 @@
 
 import { FiberRpcClient, toHex, formatShannon, ckbToShannon } from './fiber-rpc';
 
+const MIN_ROUTE_CHECK_CKB = 0.0001;
+const MIN_PAYMENT_SHANNON = 1n;
+
 export interface StreamingPaymentConfig {
   rpcUrl: string;
   recipientPubkey: string;
@@ -31,11 +34,12 @@ export class StreamingPaymentService {
   private callbacks: Set<PaymentCallback> = new Set();
   private lastPaymentTime = 0;
   private accumulatedSeconds = 0;
+  private pendingAmountShannon = 0n;
 
   constructor(config: StreamingPaymentConfig) {
     this.config = {
       ...config,
-      paymentIntervalMs: config.paymentIntervalMs || 5000, // Default: pay every 5 seconds
+      paymentIntervalMs: config.paymentIntervalMs || 1000, // Default: pay every 1 second
       currency: config.currency || 'Fibd',
     };
     this.client = new FiberRpcClient({ url: config.rpcUrl });
@@ -54,7 +58,8 @@ export class StreamingPaymentService {
     if (this.isStreaming) return;
 
     // Check if we have a valid payment route before starting
-    const canPay = await this.checkPaymentRoute(this.config.ratePerSecond);
+    const routeProbeAmount = Math.max(this.config.ratePerSecond, MIN_ROUTE_CHECK_CKB);
+    const canPay = await this.checkPaymentRoute(routeProbeAmount);
     if (!canPay) {
       throw new Error(
         'No payment route available to recipient. Please ensure you have an open channel ' +
@@ -65,6 +70,7 @@ export class StreamingPaymentService {
     this.isStreaming = true;
     this.lastPaymentTime = Date.now();
     this.accumulatedSeconds = 0;
+    this.pendingAmountShannon = 0n;
 
     this.intervalId = setInterval(() => {
       this.processPaymentTick();
@@ -96,7 +102,15 @@ export class StreamingPaymentService {
     if (secondsToPay <= 0) return;
 
     this.accumulatedSeconds -= secondsToPay;
-    const amountShannon = ckbToShannon(this.config.ratePerSecond * secondsToPay);
+    const accruedAmountShannon = ckbToShannon(this.config.ratePerSecond * secondsToPay);
+    this.pendingAmountShannon += accruedAmountShannon;
+
+    // Keep accumulating until we have at least 1 shannon to send.
+    if (this.pendingAmountShannon < MIN_PAYMENT_SHANNON) {
+      return;
+    }
+
+    const amountShannon = this.pendingAmountShannon;
 
     const tick: PaymentTick = {
       timestamp: now,
@@ -119,6 +133,7 @@ export class StreamingPaymentService {
 
       if (tick.status === 'success') {
         this.totalPaid += amountShannon;
+        this.pendingAmountShannon = 0n;
         tick.totalPaidShannon = this.totalPaid;
       }
     } catch (error) {
@@ -143,16 +158,6 @@ export class StreamingPaymentService {
 
   // Dry run to check if payment would succeed
   async checkPaymentRoute(amount: number): Promise<boolean> {
-    try {
-      const result = await this.client.sendPayment({
-        target_pubkey: this.config.recipientPubkey as `0x${string}`,
-        amount: toHex(ckbToShannon(amount)) as `0x${string}`,
-        keysend: true,
-        dry_run: true,
-      });
-      return result.status !== 'Failed';
-    } catch {
-      return false;
-    }
+    return this.client.checkPaymentRoute(this.config.recipientPubkey, toHex(ckbToShannon(amount)));
   }
 }
