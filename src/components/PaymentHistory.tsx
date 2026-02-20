@@ -85,7 +85,7 @@ export function PaymentHistory({ payments }: PaymentHistoryProps) {
                       initial={index === 0 ? { scale: 1.2 } : {}}
                       animate={{ scale: 1 }}
                     >
-                      +{formatShannon(payment.amountShannon, 6)}
+                      -{formatShannon(payment.amountShannon, 6)}
                     </motion.span>
                     <span className="text-[10px] text-fiber-muted">CKB</span>
                   </div>

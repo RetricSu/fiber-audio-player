@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@fiber-pay/sdk':
-        specifier: file:../fiber-pay/packages/sdk
-        version: file:../fiber-pay/packages/sdk
+        specifier: 0.1.0-rc.1
+        version: 0.1.0-rc.1
       motion:
         specifier: ^12.4.7
         version: 12.33.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -105,9 +105,9 @@ packages:
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@fiber-pay/sdk@file:../fiber-pay/packages/sdk':
-    resolution: {directory: ../fiber-pay/packages/sdk, type: directory}
-    engines: {node: '>=18'}
+  '@fiber-pay/sdk@0.1.0-rc.1':
+    resolution: {integrity: sha512-46XdpbkwXDs90ekuH5VVFWiDQzF0eLh56s2LzlN14DwkgytED+A/yYeBm5+ekX5ElXfQ0uBfjHsUlVXQ22OB9Q==}
+    engines: {node: '>=20'}
 
   '@humanfs/core@0.19.1':
     resolution: {integrity: sha512-5DyQ4+1JEUzejeK1JGICcideyfUbGixgS9jNgex5nqkW+cY7WZhxBigmieN5Qnw9ZosSNVC9KQKyb+GUaGyKUA==}
@@ -1905,7 +1905,7 @@ snapshots:
       '@eslint/core': 0.17.0
       levn: 0.4.1
 
-  '@fiber-pay/sdk@file:../fiber-pay/packages/sdk':
+  '@fiber-pay/sdk@0.1.0-rc.1':
     dependencies:
       zod: 4.3.6
 

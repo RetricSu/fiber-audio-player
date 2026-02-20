@@ -28,8 +28,8 @@ export function PeerSelector({ peers, selectedPeerId, onSelect, disabled }: Peer
 
   return (
     <div className="relative">
-      <label className="block text-xs text-fiber-muted mb-2 font-mono uppercase tracking-wider">
-        Recipient Peer
+      <label className="block text-[10px] text-fiber-muted mb-2 font-mono uppercase tracking-wider">
+       Select recipient from connected peers 
       </label>
 
       {/* Selected peer button */}
