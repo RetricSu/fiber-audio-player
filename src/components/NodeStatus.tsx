@@ -1,5 +1,6 @@
 'use client';
 
+import { ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { ChannelStatus } from '@/hooks/use-fiber-node';
 import { NodeInfo, fromHex } from '@/lib/fiber-rpc';
@@ -20,6 +21,8 @@ interface NodeStatusProps {
   onCheckRoute?: () => void;
   onOpenChannel?: () => void;
   onCancelSetup?: () => void;
+  topConfigPanel?: ReactNode;
+  configPanel?: ReactNode;
 }
 
 export function NodeStatus({
@@ -37,6 +40,8 @@ export function NodeStatus({
   onCheckRoute,
   onOpenChannel,
   onCancelSetup,
+  topConfigPanel,
+  configPanel,
 }: NodeStatusProps) {
   const getChannelStatusDisplay = () => {
     switch (channelStatus) {
@@ -61,7 +66,7 @@ export function NodeStatus({
   const isChannelBusy = channelStatus === 'checking' || channelStatus === 'opening_channel' || channelStatus === 'waiting_confirmation';
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-fiber-surface/50 backdrop-blur-sm border border-fiber-border p-5">
+    <div className="relative overflow-visible rounded-2xl bg-fiber-surface/50 backdrop-blur-sm border border-fiber-border p-5">
       {/* Background pattern */}
       <div className="absolute inset-0 opacity-5">
         <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -73,70 +78,75 @@ export function NodeStatus({
       </div>
 
       <div className="relative z-10">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <motion.div
-                className={`w-2.5 h-2.5 rounded-full ${
-                  isConnected
-                    ? 'bg-fiber-accent'
-                    : isConnecting
-                    ? 'bg-fiber-warning'
-                    : 'bg-fiber-muted'
-                }`}
-                animate={
-                  isConnecting
-                    ? { scale: [1, 1.2, 1], opacity: [1, 0.5, 1] }
-                    : {}
-                }
-                transition={{ duration: 0.8, repeat: Infinity }}
-              />
-              {isConnected && (
+          {/* Header */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="relative">
                 <motion.div
-                  className="absolute inset-0 rounded-full bg-fiber-accent"
-                  initial={{ scale: 1, opacity: 0.5 }}
-                  animate={{ scale: 2, opacity: 0 }}
-                  transition={{ duration: 2, repeat: Infinity }}
+                  className={`w-2.5 h-2.5 rounded-full ${
+                    isConnected
+                      ? 'bg-fiber-accent'
+                      : isConnecting
+                      ? 'bg-fiber-warning'
+                      : 'bg-fiber-muted'
+                  }`}
+                  animate={
+                    isConnecting
+                      ? { scale: [1, 1.2, 1], opacity: [1, 0.5, 1] }
+                      : {}
+                  }
+                  transition={{ duration: 0.8, repeat: Infinity }}
                 />
-              )}
+                {isConnected && (
+                  <motion.div
+                    className="absolute inset-0 rounded-full bg-fiber-accent"
+                    initial={{ scale: 1, opacity: 0.5 }}
+                    animate={{ scale: 2, opacity: 0 }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                  />
+                )}
+              </div>
+              <h3 className="text-sm font-mono uppercase tracking-wider text-fiber-muted">
+                Fiber Node
+              </h3>
             </div>
-            <h3 className="text-sm font-mono uppercase tracking-wider text-fiber-muted">
-              Fiber Node
-            </h3>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={isConnected ? onDisconnect : onConnect}
+                disabled={isConnecting}
+                className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider rounded-lg transition-all ${
+                  isConnected
+                    ? 'bg-fiber-border text-white/70 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/50'
+                    : 'bg-fiber-accent/20 text-fiber-accent hover:bg-fiber-accent/30 border border-fiber-accent/50'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                {isConnecting ? 'Connecting...' : isConnected ? 'Disconnect' : 'Connect'}
+              </button>
+            </div>
           </div>
 
-          <button
-            onClick={isConnected ? onDisconnect : onConnect}
-            disabled={isConnecting}
-            className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider rounded-lg transition-all ${
-              isConnected
-                ? 'bg-fiber-border text-white/70 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/50'
-                : 'bg-fiber-accent/20 text-fiber-accent hover:bg-fiber-accent/30 border border-fiber-accent/50'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
-          >
-            {isConnecting ? 'Connecting...' : isConnected ? 'Disconnect' : 'Connect'}
-          </button>
-        </div>
+          {/* Top config panel (inside node body) */}
+          {topConfigPanel && <div className="mb-4">{topConfigPanel}</div>}
 
-        {/* Error state */}
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30"
-          >
-            <p className="text-xs text-red-400 font-mono">{error}</p>
-          </motion.div>
-        )}
+          {/* Error state */}
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30"
+            >
+              <p className="text-xs text-red-400 font-mono">{error}</p>
+            </motion.div>
+          )}
 
-        {/* Node info */}
-        {isConnected && nodeInfo ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="space-y-3"
-          >
+          {/* Node info */}
+          {isConnected && nodeInfo ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="space-y-3"
+            >
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 rounded-lg bg-fiber-dark/50">
                 <p className="text-[10px] text-fiber-muted font-mono uppercase tracking-wider mb-1">
@@ -179,12 +189,40 @@ export function NodeStatus({
               <span className="text-fiber-accent">● LIVE</span>
             </div>
 
-            {/* Channel/Route Status */}
+            </motion.div>
+          ) : !isConnecting && !error ? (
+            <div className="text-center py-4">
+              <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-fiber-border/50 flex items-center justify-center">
+                <svg
+                  className="w-6 h-6 text-fiber-muted"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+                  />
+                </svg>
+              </div>
+              <p className="text-sm text-fiber-muted">
+                Connect to your local Fiber node to enable streaming payments
+              </p>
+            </div>
+          ) : null}
+        {/* Inline config panel */}
+        {configPanel && <div className="mt-4">{configPanel}</div>}
+
+        {/* Bottom action buttons */}
+        {isConnected && (onCheckRoute || onOpenChannel) && (
+          <div className="mt-4">
             {channelStatusDisplay && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className={`p-3 rounded-lg ${channelStatusDisplay.bg} border border-current/20`}
+                className={`p-3 rounded-lg ${channelStatusDisplay.bg} border border-current/20 mb-3`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className={`text-xs font-mono ${channelStatusDisplay.color}`}>
@@ -236,9 +274,7 @@ export function NodeStatus({
               </motion.div>
             )}
 
-            {/* Action Buttons */}
             <div className="flex gap-2">
-              {/* Check Route Button */}
               {onCheckRoute && (
                 <button
                   onClick={onCheckRoute}
@@ -249,7 +285,6 @@ export function NodeStatus({
                 </button>
               )}
 
-              {/* Open Channel Button - show when no route or error */}
               {onOpenChannel && (channelStatus === 'no_route' || channelStatus === 'error') && (
                 <button
                   onClick={onOpenChannel}
@@ -260,29 +295,8 @@ export function NodeStatus({
                 </button>
               )}
             </div>
-          </motion.div>
-        ) : !isConnecting && !error ? (
-          <div className="text-center py-6">
-            <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-fiber-border/50 flex items-center justify-center">
-              <svg
-                className="w-6 h-6 text-fiber-muted"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
-                />
-              </svg>
-            </div>
-            <p className="text-sm text-fiber-muted">
-              Connect to your local Fiber node to enable streaming payments
-            </p>
           </div>
-        ) : null}
+        )}
       </div>
     </div>
   );

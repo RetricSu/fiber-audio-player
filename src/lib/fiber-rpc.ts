@@ -111,12 +111,31 @@ export class FiberRpcClient extends SdkFiberRpcClient {
 
   // Keysend payment (spontaneous payment without invoice)
   async keysend(targetPubkey: string, amount: string, customRecords?: Record<string, string>): Promise<{ payment_hash: string; status: string; failed_error?: string }> {
-    return this.sendPayment({
+    const initial = await this.sendPayment({
       target_pubkey: this.formatRpcPubkey(targetPubkey) as unknown as `0x${string}`,
       amount: amount as `0x${string}`,
       keysend: true,
       custom_records: customRecords as Record<`0x${string}`, `0x${string}`> | undefined,
     });
+
+    if (initial.status === 'Created' || initial.status === 'Inflight') {
+      const finalized = await this.waitForPayment(initial.payment_hash, {
+        timeout: 30000,
+        interval: 1000,
+      });
+
+      return {
+        payment_hash: finalized.payment_hash,
+        status: finalized.status,
+        failed_error: finalized.failed_error,
+      };
+    }
+
+    return {
+      payment_hash: initial.payment_hash,
+      status: initial.status,
+      failed_error: initial.failed_error,
+    };
   }
 }
 

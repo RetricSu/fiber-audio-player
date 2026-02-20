@@ -57,6 +57,10 @@ export class StreamingPaymentService {
   async startStreaming(): Promise<void> {
     if (this.isStreaming) return;
 
+    if (!this.config.recipientPubkey?.trim()) {
+      throw new Error('Recipient public key is required to start streaming payments.');
+    }
+
     // Check if we have a valid payment route before starting
     const routeProbeAmount = Math.max(this.config.ratePerSecond, MIN_ROUTE_CHECK_CKB);
     const canPay = await this.checkPaymentRoute(routeProbeAmount);
@@ -102,27 +106,27 @@ export class StreamingPaymentService {
     if (secondsToPay <= 0) return;
 
     this.accumulatedSeconds -= secondsToPay;
-    const accruedAmountShannon = ckbToShannon(this.config.ratePerSecond * secondsToPay);
-    this.pendingAmountShannon += accruedAmountShannon;
+    const intervalAmountShannon = ckbToShannon(this.config.ratePerSecond * secondsToPay);
+    this.pendingAmountShannon += intervalAmountShannon;
 
     // Keep accumulating until we have at least 1 shannon to send.
     if (this.pendingAmountShannon < MIN_PAYMENT_SHANNON) {
       return;
     }
 
-    const amountShannon = this.pendingAmountShannon;
+    const amountToSendShannon = this.pendingAmountShannon;
 
     const tick: PaymentTick = {
       timestamp: now,
-      amountShannon,
-      totalPaidShannon: this.totalPaid + amountShannon,
+      amountShannon: intervalAmountShannon,
+      totalPaidShannon: this.totalPaid,
       status: 'pending',
     };
 
     try {
       const result = await this.client.keysend(
         this.config.recipientPubkey,
-        toHex(amountShannon)
+        toHex(amountToSendShannon)
       );
 
       tick.paymentHash = result.payment_hash;
@@ -132,7 +136,7 @@ export class StreamingPaymentService {
       }
 
       if (tick.status === 'success') {
-        this.totalPaid += amountShannon;
+        this.totalPaid += amountToSendShannon;
         this.pendingAmountShannon = 0n;
         tick.totalPaidShannon = this.totalPaid;
       }

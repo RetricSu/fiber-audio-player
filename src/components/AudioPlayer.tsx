@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAudioPlayer } from '@/hooks/use-audio-player';
-import { useStreamingPayment } from '@/hooks/use-streaming-payment';
+import { UseStreamingPaymentResult } from '@/hooks/use-streaming-payment';
 import { WaveformVisualizer } from './WaveformVisualizer';
 import { PaymentFlowVisualizer } from './PaymentFlowVisualizer';
 
@@ -20,10 +20,9 @@ interface Episode {
 
 interface AudioPlayerProps {
   episode: Episode;
-  rpcUrl: string;
-  recipientPubkey: string;
   isFiberConnected: boolean;
   isRouteReady: boolean;
+  payment: UseStreamingPaymentResult;
 }
 
 function formatTime(seconds: number): string {
@@ -35,10 +34,9 @@ function formatTime(seconds: number): string {
 
 export function AudioPlayer({
   episode,
-  rpcUrl,
-  recipientPubkey,
   isFiberConnected,
   isRouteReady,
+  payment,
 }: AudioPlayerProps) {
   const [volume, setVolumeState] = useState(0.8);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
@@ -46,12 +44,6 @@ export function AudioPlayer({
   const wasPlayingRef = useRef(false);
 
   const audio = useAudioPlayer(episode.audioUrl);
-  const payment = useStreamingPayment({
-    rpcUrl,
-    recipientPubkey,
-    ratePerSecond: episode.pricePerSecond,
-    paymentIntervalMs: 1000,
-  });
 
   // Ensure payment stream is stopped when playback actually transitions from playing to stopped.
   // This avoids stopping during startup while waiting for the audio play event.

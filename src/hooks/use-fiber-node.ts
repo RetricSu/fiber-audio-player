@@ -193,6 +193,12 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
         return false;
       }
 
+      if (!recipientPubkey.trim()) {
+        setChannelError('Select a recipient peer or enter a recipient public key first.');
+        setChannelStatus('error');
+        return false;
+      }
+
       setChannelStatus('checking');
       setChannelError(null);
       setChannelStateName(null);
@@ -259,6 +265,12 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
     async (recipientPubkey: string, fundingAmountCkb: number = DEFAULT_FUNDING_AMOUNT_CKB): Promise<boolean> => {
       if (!clientRef.current) {
         setChannelError('Not connected to Fiber node');
+        setChannelStatus('error');
+        return false;
+      }
+
+      if (!recipientPubkey.trim()) {
+        setChannelError('Select a recipient peer or enter a recipient public key first.');
         setChannelStatus('error');
         return false;
       }
