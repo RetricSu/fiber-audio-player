@@ -20,7 +20,6 @@ This demo showcases how content creators can monetize their podcasts using Fiber
 - 📊 Live payment history and flow visualization
 - ⚡ Keysend support (spontaneous payments without invoices)
 - 🔧 Configurable payment rates and intervals
-- 🎭 Demo mode with mock payments for testing
 
 ## Getting Started
 
@@ -44,11 +43,6 @@ pnpm build
 ```
 
 ### Configuration
-
-The demo supports two modes:
-
-1. **Demo Mode** (default): Simulates payments without requiring a Fiber node
-2. **Live Mode**: Connects to a real Fiber node and sends actual payments
 
 Configure in the Settings panel:
 - **Fiber RPC URL**: Your local Fiber node endpoint (default: `http://127.0.0.1:8229`)
