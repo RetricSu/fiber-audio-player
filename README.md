@@ -44,9 +44,17 @@ pnpm build
 
 ### Configuration
 
-Configure in the Settings panel:
-- **Fiber RPC URL**: Your local Fiber node endpoint (default: `http://127.0.0.1:8229`)
-- **Recipient Public Key**: The public key receiving payments
+**For podcast deployers**, set the recipient pubkey in `.env.local`:
+
+```bash
+# Copy the example env file
+cp .env.local.example .env.local
+
+# Edit .env.local and set your Fiber node pubkey
+NEXT_PUBLIC_RECIPIENT_PUBKEY=03abc...your_pubkey_hex
+```
+
+**For listeners**, configure your Fiber node RPC URL in the app UI (default: `http://127.0.0.1:8229`).
 
 ## Fiber Network RPC Integration
 

@@ -21,8 +21,8 @@ interface NodeStatusProps {
   onCheckRoute?: () => void;
   onOpenChannel?: () => void;
   onCancelSetup?: () => void;
+  recipientPubkey?: string;
   topConfigPanel?: ReactNode;
-  configPanel?: ReactNode;
 }
 
 export function NodeStatus({
@@ -40,8 +40,8 @@ export function NodeStatus({
   onCheckRoute,
   onOpenChannel,
   onCancelSetup,
+  recipientPubkey,
   topConfigPanel,
-  configPanel,
 }: NodeStatusProps) {
   const getChannelStatusDisplay = () => {
     switch (channelStatus) {
@@ -212,8 +212,25 @@ export function NodeStatus({
               </p>
             </div>
           ) : null}
-        {/* Inline config panel */}
-        {configPanel && <div className="mt-4">{configPanel}</div>}
+
+        {/* Recipient pubkey (read-only, set by deployer) */}
+        {recipientPubkey && (
+          <div className="mt-4 p-3 rounded-lg bg-fiber-dark/50">
+            <p className="text-[10px] text-fiber-muted font-mono uppercase tracking-wider mb-1">
+              Paying To
+            </p>
+            <p className="text-xs font-mono text-white/70 truncate" title={recipientPubkey}>
+              {recipientPubkey}
+            </p>
+          </div>
+        )}
+        {!recipientPubkey && isConnected && (
+          <div className="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+            <p className="text-xs text-red-400 font-mono">
+              Recipient pubkey not configured. The site owner needs to set NEXT_PUBLIC_RECIPIENT_PUBKEY.
+            </p>
+          </div>
+        )}
 
         {/* Bottom action buttons */}
         {isConnected && (onCheckRoute || onOpenChannel) && (

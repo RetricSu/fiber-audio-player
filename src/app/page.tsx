@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion } from 'motion/react';
 import { AudioPlayer } from '@/components/AudioPlayer';
 import { NodeStatus } from '@/components/NodeStatus';
 import { PaymentHistory } from '@/components/PaymentHistory';
-import { PeerSelector } from '@/components/PeerSelector';
 import { useFiberNode } from '@/hooks/use-fiber-node';
 import { useStreamingPayment } from '@/hooks/use-streaming-payment';
 
@@ -27,87 +26,18 @@ const DEMO_EPISODE = {
 // Default configuration
 const DEFAULT_RPC_URL = 'http://127.0.0.1:8229';
 
+// Recipient pubkey is fixed at deploy time by the podcast owner
+const RECIPIENT_PUBKEY = process.env.NEXT_PUBLIC_RECIPIENT_PUBKEY || '';
+
 export default function Home() {
   const [rpcUrl, setRpcUrl] = useState(DEFAULT_RPC_URL);
-  const [recipientPubkey, setRecipientPubkey] = useState('');
-  const [recipientPeerId, setRecipientPeerId] = useState('');
-  const [recipientMode, setRecipientMode] = useState<'peer' | 'manual'>('peer');
-  const [peerAddress, setPeerAddress] = useState('');
 
   const fiberNode = useFiberNode(rpcUrl);
-
-  const truncateId = (value: string, prefixLen = 10, suffixLen = 8) => {
-    if (!value) return 'Not set';
-    if (value.length <= prefixLen + suffixLen + 3) return value;
-    return `${value.slice(0, prefixLen)}...${value.slice(-suffixLen)}`;
-  };
-
-  const activeRecipientPeer = fiberNode.peers.find((peer) => peer.peer_id === recipientPeerId);
-
-  // When user selects a peer from PeerSelector, update both peer_id and pubkey
-  const handlePeerSelect = (peerId: string) => {
-    setRecipientMode('peer');
-    setRecipientPeerId(peerId);
-    const peer = fiberNode.peers.find((p) => p.peer_id === peerId);
-    if (peer?.pubkey) {
-      setRecipientPubkey(peer.pubkey);
-    }
-  };
-
-  const handleRecipientModeChange = (mode: 'peer' | 'manual') => {
-    setRecipientMode(mode);
-
-    if (mode === 'manual') {
-      setRecipientPeerId('');
-      return;
-    }
-
-    if (fiberNode.peers.length === 0) return;
-
-    const preferredPeer =
-      fiberNode.peers.find((peer) => peer.peer_id === recipientPeerId) ||
-      fiberNode.peers.find((peer) => peer.pubkey === recipientPubkey) ||
-      fiberNode.peers[0];
-
-    setRecipientPeerId(preferredPeer.peer_id);
-    if (preferredPeer.pubkey) {
-      setRecipientPubkey(preferredPeer.pubkey);
-    }
-  };
-
-  // Auto-select first peer if connected and no peer selected
-  useEffect(() => {
-    if (!fiberNode.isConnected || fiberNode.peers.length === 0) return;
-
-    if (recipientMode === 'manual') return;
-
-    if (recipientPeerId) {
-      const selectedPeerStillExists = fiberNode.peers.some((peer) => peer.peer_id === recipientPeerId);
-      if (!selectedPeerStillExists) {
-        setRecipientPeerId('');
-      }
-      return;
-    }
-
-    if (recipientPubkey) {
-      const matchingPeer = fiberNode.peers.find((peer) => peer.pubkey === recipientPubkey);
-      if (matchingPeer) {
-        setRecipientPeerId(matchingPeer.peer_id);
-      }
-      return;
-    }
-
-    const firstPeer = fiberNode.peers[0];
-    setRecipientPeerId(firstPeer.peer_id);
-    if (firstPeer.pubkey) {
-      setRecipientPubkey(firstPeer.pubkey);
-    }
-  }, [fiberNode.isConnected, fiberNode.peers, recipientPeerId, recipientPubkey, recipientMode]);
 
   // For payment history, we need to track payments
   const payment = useStreamingPayment({
     rpcUrl,
-    recipientPubkey,
+    recipientPubkey: RECIPIENT_PUBKEY,
     ratePerSecond: DEMO_EPISODE.pricePerSecond,
     paymentIntervalMs: 1000,
   });
@@ -201,8 +131,9 @@ export default function Home() {
                 channelStateName={fiberNode.channelStateName}
                 channelElapsed={fiberNode.channelElapsed}
                 availableBalance={fiberNode.availableBalance}
-                onCheckRoute={() => fiberNode.checkPaymentRoute(recipientPubkey)}
-                onOpenChannel={() => fiberNode.setupChannel(recipientPubkey)}
+                recipientPubkey={RECIPIENT_PUBKEY}
+                onCheckRoute={() => fiberNode.checkPaymentRoute(RECIPIENT_PUBKEY)}
+                onOpenChannel={() => fiberNode.setupChannel(RECIPIENT_PUBKEY)}
                 onCancelSetup={fiberNode.cancelChannelSetup}
                 topConfigPanel={
                   !fiberNode.isConnected ? (
@@ -219,113 +150,6 @@ export default function Home() {
                       />
                     </div>
                   ) : null
-                }
-                configPanel={
-                  <div className="space-y-4">
-                    <div>
-                      <div className="flex items-center justify-between gap-3 mb-3">
-                        <label className="text-xs text-fiber-muted font-mono uppercase tracking-wider">
-                          Recipient
-                        </label>
-
-                        <div className="inline-flex p-0.5 rounded-lg bg-fiber-dark/70 border border-fiber-border">
-                          <button
-                            onClick={() => handleRecipientModeChange('peer')}
-                            className={`px-2.5 py-1 text-[11px] font-mono uppercase tracking-wider rounded-md transition-colors ${
-                              recipientMode === 'peer'
-                                ? 'bg-fiber-accent/20 text-fiber-accent border border-fiber-accent/40'
-                                : 'text-fiber-muted hover:text-white'
-                            }`}
-                          >
-                            Peer
-                          </button>
-                          <button
-                            onClick={() => handleRecipientModeChange('manual')}
-                            className={`px-2.5 py-1 text-[11px] font-mono uppercase tracking-wider rounded-md transition-colors ${
-                              recipientMode === 'manual'
-                                ? 'bg-fiber-accent/20 text-fiber-accent border border-fiber-accent/40'
-                                : 'text-fiber-muted hover:text-white'
-                            }`}
-                          >
-                            Manual
-                          </button>
-                        </div>
-                      </div>
-
-                      {recipientMode === 'peer' ? (
-                        fiberNode.isConnected && fiberNode.peers.length > 0 ? (
-                          <div className="space-y-2">
-                            <PeerSelector
-                              peers={fiberNode.peers}
-                              selectedPeerId={recipientPeerId}
-                              onSelect={handlePeerSelect}
-                            />
-                            <p className="text-[10px] text-fiber-muted/80">
-                              Select a connected peer to set the payment recipient.
-                            </p>
-                          </div>
-                        ) : (
-                          <p className="text-[10px] text-fiber-warning">
-                            No connected peers found. Switch to Manual and connect using recipient multiaddr.
-                          </p>
-                        )
-                      ) : (
-                        <div className="space-y-2">
-                          <label className="block text-[10px] text-fiber-muted font-mono uppercase tracking-wider">
-                            Connect to recipient by multiaddr
-                          </label>
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              value={peerAddress}
-                              onChange={(e) => setPeerAddress(e.target.value)}
-                              className="flex-1 min-w-0 px-3 py-2 bg-fiber-dark border border-fiber-border rounded-lg text-sm font-mono text-white focus:outline-none focus:border-fiber-accent/50 transition-colors"
-                              placeholder="/ip4/127.0.0.1/tcp/8228/p2p/Qm..."
-                              disabled={fiberNode.isConnectingPeer || !fiberNode.isConnected}
-                            />
-                            <button
-                              onClick={async () => {
-                                if (!peerAddress.trim()) return;
-                                const peer = await fiberNode.connectToPeer(peerAddress.trim());
-                                if (peer) {
-                                  setPeerAddress('');
-                                  setRecipientMode('manual');
-                                  setRecipientPeerId(peer.peer_id);
-                                  if (peer.pubkey) {
-                                    setRecipientPubkey(peer.pubkey);
-                                  }
-                                }
-                              }}
-                              disabled={fiberNode.isConnectingPeer || !peerAddress.trim() || !fiberNode.isConnected}
-                              className="px-4 py-2 bg-fiber-accent/20 text-fiber-accent border border-fiber-accent/30 rounded-lg text-sm font-mono hover:bg-fiber-accent/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                            >
-                              {fiberNode.isConnectingPeer ? 'Connecting...' : 'Connect'}
-                            </button>
-                          </div>
-                          {!fiberNode.isConnected && (
-                            <p className="text-[10px] text-fiber-warning">
-                              Connect Fiber node first to connect recipient peer.
-                            </p>
-                          )}
-                          {fiberNode.isConnected && activeRecipientPeer && (
-                            <p className="text-[10px] text-fiber-muted/80">
-                              Connected recipient: {truncateId(activeRecipientPeer.peer_id, 12, 6)}
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {fiberNode.connectPeerError && (
-                      <p className="text-[10px] text-red-400 mt-1">
-                        {fiberNode.connectPeerError}
-                      </p>
-                    )}
-
-                    <p className="text-[10px] text-fiber-muted/60">
-                      Configure node and recipient here, then use Check Route below before starting playback.
-                    </p>
-                  </div>
                 }
               />
             </div>
