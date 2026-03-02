@@ -1,4 +1,4 @@
-// Fiber Network RPC - Migrated to use @fiber-pay/sdk (Browser version)
+// Fiber Network RPC - Migrated to use @fiber-pay/sdk
 // Re-exports SDK types and utilities for backward compatibility
 
 import {
@@ -7,19 +7,11 @@ import {
   fromHex as sdkFromHex,
   ckbToShannons,
   shannonsToCkb,
-} from '@fiber-pay/sdk/browser';
+  ChannelState,
+} from '@fiber-pay/sdk';
 
-// Define ChannelState enum locally (matching SDK values)
-export enum ChannelState {
-  NegotiatingFunding = 'NEGOTIATING_FUNDING',
-  CollaboratingFundingTx = 'COLLABORATING_FUNDING_TX',
-  SigningCommitment = 'SIGNING_COMMITMENT',
-  AwaitingTxSignatures = 'AWAITING_TX_SIGNATURES',
-  AwaitingChannelReady = 'AWAITING_CHANNEL_READY',
-  ChannelReady = 'CHANNEL_READY',
-  ShuttingDown = 'SHUTTING_DOWN',
-  Closed = 'CLOSED',
-}
+// Re-export ChannelState from SDK
+export { ChannelState };
 
 // Re-export utility functions with backward-compatible names
 export const toHex = sdkToHex;
@@ -146,4 +138,4 @@ export type {
   PeerInfo, 
   SendPaymentParams,
   NewInvoiceParams,
-} from '@fiber-pay/sdk/browser';
+} from '@fiber-pay/sdk';
