@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@fiber-pay/sdk':
-        specifier: 0.1.0-rc.1
-        version: 0.1.0-rc.1
+        specifier: 0.1.0-rc.4
+        version: 0.1.0-rc.4
       motion:
         specifier: ^12.4.7
         version: 12.33.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -105,8 +105,8 @@ packages:
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@fiber-pay/sdk@0.1.0-rc.1':
-    resolution: {integrity: sha512-46XdpbkwXDs90ekuH5VVFWiDQzF0eLh56s2LzlN14DwkgytED+A/yYeBm5+ekX5ElXfQ0uBfjHsUlVXQ22OB9Q==}
+  '@fiber-pay/sdk@0.1.0-rc.4':
+    resolution: {integrity: sha512-tE8Rz1csROZRO0G3uMKdLhjJOEfi6ohTV2KXlAc3WDVR9fKDhd2BqVIAPlxwbEqJlOa3z/EMo9zkLtWjOr4bcw==}
     engines: {node: '>=20'}
 
   '@humanfs/core@0.19.1':
@@ -351,6 +351,10 @@ packages:
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [win32]
+
+  '@noble/hashes@2.0.1':
+    resolution: {integrity: sha512-XlOlEbQcE9fmuXxrVTXCTlG2nlRXa9Rj3rr5Ue/+tX+nmkgbX720YHh0VR3hBF9xDvwnb8D2shVGOwNx+ulArw==}
+    engines: {node: '>= 20.19.0'}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -1916,8 +1920,9 @@ snapshots:
       '@eslint/core': 0.17.0
       levn: 0.4.1
 
-  '@fiber-pay/sdk@0.1.0-rc.1':
+  '@fiber-pay/sdk@0.1.0-rc.4':
     dependencies:
+      '@noble/hashes': 2.0.1
       zod: 4.3.6
 
   '@humanfs/core@0.19.1': {}
@@ -2078,6 +2083,8 @@ snapshots:
 
   '@next/swc-win32-x64-msvc@15.5.12':
     optional: true
+
+  '@noble/hashes@2.0.1': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
