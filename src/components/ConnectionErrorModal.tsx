@@ -179,10 +179,10 @@ export function ConnectionErrorModal({ isOpen, onClose, error, rpcUrl }: Connect
                       </p>
 
                       <div className="space-y-2">
-                        <p className="text-xs font-mono uppercase tracking-wider text-fiber-muted">1. Install fiber-pay</p>
+                        <p className="text-xs font-mono uppercase tracking-wider text-fiber-muted">1. Install</p>
                         <div className="relative">
                           <pre className="p-3 rounded-lg bg-black/40 text-xs font-mono text-white/80 overflow-x-auto">
-                            npm install -g fiber-pay
+                            npm install -g @fiber-pay/cli@next
                           </pre>
                         </div>
                       </div>
@@ -191,14 +191,14 @@ export function ConnectionErrorModal({ isOpen, onClose, error, rpcUrl }: Connect
                         <p className="text-xs font-mono uppercase tracking-wider text-fiber-muted">2. Start the node</p>
                         <div className="relative">
                           <pre className="p-3 rounded-lg bg-black/40 text-xs font-mono text-white/80 overflow-x-auto">
-                            fiber-pay node --rpc-port 8227 --peer-port 8228
+                            fiber-pay node start
                           </pre>
                         </div>
                       </div>
 
                       <div className="pt-2 border-t border-fiber-border/30">
                         <p className="text-xs text-fiber-muted">
-                          Default RPC endpoint:{' '}
+                          Default RPC:{' '}
                           <code className="text-fiber-accent">http://127.0.0.1:8227</code>
                         </p>
                       </div>
