@@ -32,7 +32,7 @@ export function NodeStatus({
   isConnecting,
   nodeInfo,
   error,
-  rpcUrl = 'http://127.0.0.1:8227',
+  rpcUrl = 'http://127.0.0.1:8229',
   onConnect,
   onDisconnect,
   channelStatus = 'idle',
