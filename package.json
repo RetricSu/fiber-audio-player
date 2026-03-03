@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@fiber-pay/sdk": "0.1.0-rc.4",
+    "@fiber-pay/sdk": "0.1.0-rc.5",
     "motion": "^12.4.7",
     "next": "15.5.12",
     "react": "^19.0.0",
