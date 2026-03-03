@@ -1,15 +1,17 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { ChannelStatus } from '@/hooks/use-fiber-node';
 import { NodeInfo, fromHex } from '@/lib/fiber-rpc';
+import { ConnectionErrorModal } from './ConnectionErrorModal';
 
 interface NodeStatusProps {
   isConnected: boolean;
   isConnecting: boolean;
   nodeInfo: NodeInfo | null;
   error: string | null;
+  rpcUrl?: string;
   onConnect: () => void;
   onDisconnect: () => void;
   // Channel status props
@@ -30,6 +32,7 @@ export function NodeStatus({
   isConnecting,
   nodeInfo,
   error,
+  rpcUrl = 'http://127.0.0.1:8229',
   onConnect,
   onDisconnect,
   channelStatus = 'idle',
@@ -43,6 +46,15 @@ export function NodeStatus({
   recipientPubkey,
   topConfigPanel,
 }: NodeStatusProps) {
+  const [showErrorModal, setShowErrorModal] = useState(false);
+
+  // Auto-show error modal when connection fails
+  useEffect(() => {
+    if (error && !isConnecting && !isConnected) {
+      setShowErrorModal(true);
+    }
+  }, [error, isConnecting, isConnected]);
+
   const getChannelStatusDisplay = () => {
     switch (channelStatus) {
       case 'checking':
@@ -134,9 +146,13 @@ export function NodeStatus({
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30"
+              className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 cursor-pointer hover:bg-red-500/20 transition-colors"
+              onClick={() => setShowErrorModal(true)}
             >
-              <p className="text-xs text-red-400 font-mono">{error}</p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-red-400 font-mono">{error}</p>
+                <span className="text-[10px] text-red-400/60 font-mono">Click for help →</span>
+              </div>
             </motion.div>
           )}
 
@@ -315,6 +331,14 @@ export function NodeStatus({
           </div>
         )}
       </div>
+
+      {/* Connection Error Modal */}
+      <ConnectionErrorModal
+        isOpen={showErrorModal}
+        onClose={() => setShowErrorModal(false)}
+        error={error}
+        rpcUrl={rpcUrl}
+      />
     </div>
   );
 }
