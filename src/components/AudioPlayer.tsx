@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAudioPlayer } from '@/hooks/use-audio-player';
 import { UseStreamingPaymentResult } from '@/hooks/use-streaming-payment';
+import { authorizeStream, toAbsolutePlaylistUrl, verifyPayment } from '@/lib/stream-auth';
 import { WaveformVisualizer } from './WaveformVisualizer';
 import { PaymentFlowVisualizer } from './PaymentFlowVisualizer';
 
@@ -38,12 +39,18 @@ export function AudioPlayer({
   isRouteReady,
   payment,
 }: AudioPlayerProps) {
+  const requestedSeconds = Math.max(
+    1,
+    Number(process.env.NEXT_PUBLIC_STREAM_REQUESTED_SECONDS ?? 30)
+  );
   const [volume, setVolumeState] = useState(0.8);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
   const [playbackGuardError, setPlaybackGuardError] = useState<string | null>(null);
+  const [playbackSrc, setPlaybackSrc] = useState(episode.audioUrl);
   const wasPlayingRef = useRef(false);
+  const shouldAutoPlayAfterAuthorizeRef = useRef(false);
 
-  const audio = useAudioPlayer(episode.audioUrl);
+  const audio = useAudioPlayer(playbackSrc);
 
   // Ensure payment stream is stopped when playback actually transitions from playing to stopped.
   // This avoids stopping during startup while waiting for the audio play event.
@@ -62,6 +69,17 @@ export function AudioPlayer({
       setPlaybackGuardError(payment.error);
     }
   }, [audio, payment]);
+
+  useEffect(() => {
+    if (!shouldAutoPlayAfterAuthorizeRef.current) {
+      return;
+    }
+
+    shouldAutoPlayAfterAuthorizeRef.current = false;
+    audio.play().catch(() => {
+      setPlaybackGuardError('Playback failed after authorization.');
+    });
+  }, [audio, playbackSrc]);
 
   const handlePlayPause = useCallback(async () => {
     if (audio.isPlaying) {
@@ -86,9 +104,27 @@ export function AudioPlayer({
         return;
       }
 
-      await audio.play();
+      try {
+        const verify = await verifyPayment({
+          requestedSeconds,
+        });
+
+        const authorized = await authorizeStream({
+          paymentSessionId: verify.payment.paymentSessionId,
+          requestedSeconds,
+        });
+
+        const playlistUrl = toAbsolutePlaylistUrl(authorized.stream.playlistUrl);
+        shouldAutoPlayAfterAuthorizeRef.current = true;
+        setPlaybackSrc(playlistUrl);
+      } catch (error) {
+        await payment.stop();
+        setPlaybackGuardError(
+          error instanceof Error ? error.message : 'Failed to authorize stream playback.'
+        );
+      }
     }
-  }, [audio, isFiberConnected, isRouteReady, payment]);
+  }, [audio, isFiberConnected, isRouteReady, payment, requestedSeconds]);
 
   const handleSeek = useCallback(
     (progress: number) => {
