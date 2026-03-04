@@ -86,7 +86,7 @@ export default function Home() {
                 transition={{ duration: 2, repeat: Infinity }}
               />
             </div>
-            <span className="text-sm font-mono uppercase tracking-wider text-fiber-muted">
+            <span className="text-sm font-mono uppercase tracking-wider text-fiber-muted/95">
               Fiber Audio
             </span>
           </div>
@@ -98,7 +98,7 @@ export default function Home() {
             <span className="text-white/90">.</span>
           </h1>
 
-          <p className="text-fiber-muted max-w-xl mx-auto">
+          <p className="text-white/90 max-w-xl mx-auto">
             Experience the future of content monetization. Pay only for what you listen to,
             streamed in real-time through Fiber Network.
           </p>
@@ -158,7 +158,7 @@ export default function Home() {
                 topConfigPanel={
                   !fiberNode.isConnected ? (
                     <div>
-                      <label className="block text-xs text-fiber-muted mb-2 font-mono uppercase tracking-wider">
+                      <label className="block text-xs text-fiber-muted/95 mb-2 font-mono uppercase tracking-wider">
                         Fiber RPC URL
                       </label>
                       <input
@@ -189,7 +189,7 @@ export default function Home() {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.6, delay: 0.5 }}
         >
-          <div className="inline-flex items-center gap-6 text-xs text-fiber-muted">
+          <div className="inline-flex items-center gap-6 text-xs text-fiber-muted/95">
             <span>Powered by Fiber Network</span>
             <span className="w-1 h-1 rounded-full bg-fiber-border" />
             <span>Built on CKB</span>

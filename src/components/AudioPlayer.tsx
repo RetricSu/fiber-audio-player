@@ -179,7 +179,7 @@ export function AudioPlayer({
                 {episode.title}
               </h2>
               <p className="text-fiber-muted mb-4">{episode.artist}</p>
-              <p className="text-sm text-fiber-muted/70 line-clamp-2 hidden sm:block">
+              <p className="text-sm text-white/90 line-clamp-2 hidden sm:block">
                 {episode.description}
               </p>
 

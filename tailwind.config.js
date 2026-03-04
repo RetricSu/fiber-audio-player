@@ -17,7 +17,7 @@ module.exports = {
           deeper: '#050508',
           surface: '#12121a',
           border: '#1e1e2a',
-          muted: '#6a6a82',
+          muted: '#8b8ca8',
           accent: '#00ffa3',
           glow: '#00ff88',
           warning: '#ffaa00',
