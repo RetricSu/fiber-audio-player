@@ -125,6 +125,7 @@ export default function Home() {
                 isConnecting={fiberNode.isConnecting}
                 nodeInfo={fiberNode.nodeInfo}
                 error={fiberNode.error}
+                rpcUrl={rpcUrl}
                 onConnect={fiberNode.connect}
                 onDisconnect={fiberNode.disconnect}
                 channelStatus={fiberNode.channelStatus}
