@@ -1,16 +1,13 @@
 {
-  "name": "fiber-audio-player-backend",
+  "name": "backend",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "dev:app": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
-    "build:app": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit",
-    "typecheck:app": "tsc --noEmit"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.4",
