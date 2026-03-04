@@ -17,7 +17,7 @@ export function PaymentFlowVisualizer({
   totalPaid,
 }: PaymentFlowVisualizerProps) {
   return (
-    <div className="relative h-32 overflow-hidden rounded-2xl bg-fiber-surface/50 backdrop-blur-sm border border-fiber-border">
+    <div className="relative h-32 overflow-hidden rounded-2xl bg-fiber-surface/70 backdrop-blur-sm border border-fiber-border">
       {/* Background gradient flow */}
       <div
         className={`absolute inset-0 transition-opacity duration-500 ${
@@ -66,18 +66,18 @@ export function PaymentFlowVisualizer({
       {/* Content */}
       <div className="relative z-10 flex items-center justify-between h-full px-6">
         <div className="space-y-1">
-          <p className="text-xs text-fiber-muted font-mono uppercase tracking-wider">
+          <p className="text-xs text-fiber-muted/95 font-mono uppercase tracking-wider">
             Payment Stream
           </p>
           <div className="flex items-baseline gap-2">
             <span
               className={`text-3xl font-display font-light tabular-nums ${
-                isActive ? 'text-fiber-accent' : 'text-white/60'
+                isActive ? 'text-fiber-accent' : 'text-white/85'
               }`}
             >
               {totalPaid}
             </span>
-            <span className="text-sm text-fiber-muted">CKB</span>
+            <span className="text-sm text-fiber-muted/95">CKB</span>
           </div>
         </div>
 
@@ -103,7 +103,7 @@ export function PaymentFlowVisualizer({
               />
             )}
           </div>
-          <span className={`text-sm font-mono ${isActive ? 'text-fiber-accent' : 'text-fiber-muted'}`}>
+          <span className={`text-sm font-mono ${isActive ? 'text-fiber-accent' : 'text-fiber-muted/95'}`}>
             {isActive ? 'STREAMING' : 'PAUSED'}
           </span>
         </div>

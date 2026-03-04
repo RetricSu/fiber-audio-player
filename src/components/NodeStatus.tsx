@@ -31,6 +31,7 @@ interface NodeStatusProps {
   onOpenChannel?: () => void;
   onCancelSetup?: () => void;
   recipientPubkey?: string;
+  recipientMultiaddrConfigured?: boolean;
   topConfigPanel?: ReactNode;
 }
 
@@ -58,6 +59,7 @@ export function NodeStatus({
   onOpenChannel,
   onCancelSetup,
   recipientPubkey,
+  recipientMultiaddrConfigured = false,
   topConfigPanel,
 }: NodeStatusProps) {
   const [showErrorModal, setShowErrorModal] = useState(false);
@@ -93,7 +95,7 @@ export function NodeStatus({
   const shouldDisableOpenChannel = isChannelBusy || !isFundingSufficient;
 
   return (
-    <div className="relative overflow-visible rounded-2xl bg-fiber-surface/50 backdrop-blur-sm border border-fiber-border p-5">
+    <div className="relative overflow-visible rounded-2xl bg-fiber-surface/85 backdrop-blur-sm border border-fiber-border/90 p-5">
       {/* Background pattern */}
       <div className="absolute inset-0 opacity-5">
         <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -133,7 +135,7 @@ export function NodeStatus({
                   />
                 )}
               </div>
-              <h3 className="text-sm font-mono uppercase tracking-wider text-fiber-muted">
+              <h3 className="text-sm font-mono uppercase tracking-wider text-fiber-muted/95">
                 Fiber Node
               </h3>
             </div>
@@ -142,9 +144,9 @@ export function NodeStatus({
               <button
                 onClick={isConnected ? onDisconnect : onConnect}
                 disabled={isConnecting}
-                className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider rounded-lg transition-all ${
+                className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider rounded-lg transition-all border ${
                   isConnected
-                    ? 'bg-fiber-border text-white/70 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/50'
+                    ? 'bg-fiber-border/90 text-white/90 border-fiber-border hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/50'
                     : 'bg-fiber-accent/20 text-fiber-accent hover:bg-fiber-accent/30 border border-fiber-accent/50'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
@@ -166,7 +168,7 @@ export function NodeStatus({
             >
               <div className="flex items-center justify-between">
                 <p className="text-xs text-red-400 font-mono">{error}</p>
-                <span className="text-[10px] text-red-400/60 font-mono">Click for help →</span>
+                <span className="text-xs text-red-300/70 font-mono">Click for help →</span>
               </div>
             </motion.div>
           )}
@@ -179,38 +181,38 @@ export function NodeStatus({
               className="space-y-3"
             >
             <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 rounded-lg bg-fiber-dark/50">
-                <p className="text-[10px] text-fiber-muted font-mono uppercase tracking-wider mb-1">
+              <div className="p-3 rounded-lg bg-fiber-dark/75 border border-fiber-border/60">
+                <p className="text-xs text-fiber-muted/95 font-mono uppercase tracking-wider mb-1">
                   Channels
                 </p>
-                <p className="text-xl font-display text-white">
+                <p className="text-xl font-display text-white/95">
                   {channelCount}
                 </p>
               </div>
-              <div className="p-3 rounded-lg bg-fiber-dark/50">
-                <p className="text-[10px] text-fiber-muted font-mono uppercase tracking-wider mb-1">
+              <div className="p-3 rounded-lg bg-fiber-dark/75 border border-fiber-border/60">
+                <p className="text-xs text-fiber-muted/95 font-mono uppercase tracking-wider mb-1">
                   Peers
                 </p>
-                <p className="text-xl font-display text-white">
+                <p className="text-xl font-display text-white/95">
                   {peerCount}
                 </p>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 rounded-lg bg-fiber-dark/50">
-                <p className="text-[10px] text-fiber-muted font-mono uppercase tracking-wider mb-1">
+              <div className="p-3 rounded-lg bg-fiber-dark/75 border border-fiber-border/60">
+                <p className="text-xs text-fiber-muted/95 font-mono uppercase tracking-wider mb-1">
                   Funding Amount
                 </p>
-                <p className="text-sm font-display text-white">
+                <p className="text-sm font-display text-white/95">
                   {fundingAmountCkb} CKB
                 </p>
               </div>
-              <div className="p-3 rounded-lg bg-fiber-dark/50">
-                <p className="text-[10px] text-fiber-muted font-mono uppercase tracking-wider mb-1">
+              <div className="p-3 rounded-lg bg-fiber-dark/75 border border-fiber-border/60">
+                <p className="text-xs text-fiber-muted/95 font-mono uppercase tracking-wider mb-1">
                   Funding Balance
                 </p>
-                <p className="text-sm font-display text-white">
+                <p className="text-sm font-display text-white/95">
                   {fundingBalanceCkb === null ? 'N/A' : `${fundingBalanceCkb.toFixed(4)} CKB`}
                 </p>
               </div>
@@ -224,26 +226,26 @@ export function NodeStatus({
               </div>
             )}
 
-            <div className="p-3 rounded-lg bg-fiber-dark/50">
-              <p className="text-[10px] text-fiber-muted font-mono uppercase tracking-wider mb-1">
+            <div className="p-3 rounded-lg bg-fiber-dark/75 border border-fiber-border/60">
+              <p className="text-xs text-fiber-muted/95 font-mono uppercase tracking-wider mb-1">
                 Node ID
               </p>
-              <p className="text-xs font-mono text-white/70 truncate">
+              <p className="text-xs font-mono text-white/90 truncate">
                 {nodeInfo.node_id}
               </p>
             </div>
 
             {nodeInfo.node_name && (
-              <div className="p-3 rounded-lg bg-fiber-dark/50">
-                <p className="text-[10px] text-fiber-muted font-mono uppercase tracking-wider mb-1">
+              <div className="p-3 rounded-lg bg-fiber-dark/75 border border-fiber-border/60">
+                <p className="text-xs text-fiber-muted/95 font-mono uppercase tracking-wider mb-1">
                   Name
                 </p>
-                <p className="text-sm font-mono text-white/90">{nodeInfo.node_name}</p>
+                <p className="text-sm font-mono text-white/95">{nodeInfo.node_name}</p>
               </div>
             )}
 
-            <div className="flex items-center justify-between text-[10px] font-mono text-fiber-muted">
-              <span>v{nodeInfo.version}</span>
+            <div className="flex items-center justify-between text-xs font-mono text-fiber-muted/95">
+              <span className="text-white/85">v{nodeInfo.version}</span>
               <span className="text-fiber-accent">● LIVE</span>
             </div>
 
@@ -273,11 +275,11 @@ export function NodeStatus({
 
         {/* Recipient pubkey (read-only, set by deployer) */}
         {recipientPubkey && (
-          <div className="mt-4 p-3 rounded-lg bg-fiber-dark/50">
-            <p className="text-[10px] text-fiber-muted font-mono uppercase tracking-wider mb-1">
+          <div className="mt-4 p-3 rounded-lg bg-fiber-dark/75 border border-fiber-border/60">
+            <p className="text-xs text-fiber-muted/95 font-mono uppercase tracking-wider mb-1">
               Paying To
             </p>
-            <p className="text-xs font-mono text-white/70 truncate" title={recipientPubkey}>
+            <p className="text-xs font-mono text-white/90 truncate" title={recipientPubkey}>
               {recipientPubkey}
             </p>
           </div>
@@ -286,6 +288,13 @@ export function NodeStatus({
           <div className="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
             <p className="text-xs text-red-400 font-mono">
               Recipient pubkey not configured. The site owner needs to set NEXT_PUBLIC_RECIPIENT_PUBKEY.
+            </p>
+          </div>
+        )}
+        {recipientPubkey && isConnected && !recipientMultiaddrConfigured && (
+          <div className="mt-3 p-3 rounded-lg bg-fiber-warning/10 border border-fiber-warning/30">
+            <p className="text-xs text-fiber-warning font-mono">
+              Auto peer bootstrap disabled. Set NEXT_PUBLIC_RECIPIENT_MULTIADDR so users without bootnodes can connect automatically.
             </p>
           </div>
         )}
@@ -305,7 +314,7 @@ export function NodeStatus({
                   </span>
                   <div className="flex items-center gap-2">
                     {isChannelBusy && channelElapsed > 0 && (
-                      <span className="text-[10px] font-mono text-fiber-muted tabular-nums">
+                      <span className="text-xs font-mono text-fiber-muted/95 tabular-nums">
                         {Math.floor(channelElapsed / 60)}:{(channelElapsed % 60).toString().padStart(2, '0')}
                       </span>
                     )}
@@ -319,24 +328,24 @@ export function NodeStatus({
                   </div>
                 </div>
                 {channelStatus === 'ready' && availableBalance !== '0' && (
-                  <p className="text-xs text-fiber-muted">
-                    Available: <span className="text-white">{availableBalance} CKB</span>
+                  <p className="text-xs text-fiber-muted/95">
+                    Available: <span className="text-white/95">{availableBalance} CKB</span>
                   </p>
                 )}
                 {channelStatus === 'waiting_confirmation' && (
                   <div className="space-y-1.5">
                     {channelStateName && (
-                      <p className="text-[10px] font-mono text-fiber-muted">
-                        State: <span className="text-white/70">{channelStateName}</span>
+                      <p className="text-xs font-mono text-fiber-muted/95">
+                        State: <span className="text-white/90">{channelStateName}</span>
                       </p>
                     )}
-                    <p className="text-xs text-fiber-muted">
+                    <p className="text-xs text-fiber-muted/95">
                       Channel is being confirmed on-chain. This may take a few minutes.
                     </p>
                     {onCancelSetup && (
                       <button
                         onClick={onCancelSetup}
-                        className="mt-1.5 px-2 py-1 text-[10px] font-mono uppercase tracking-wider rounded bg-fiber-dark/80 text-fiber-muted hover:text-red-400 hover:bg-red-500/10 border border-fiber-border hover:border-red-500/30 transition-all"
+                        className="mt-1.5 px-2 py-1 text-xs font-mono uppercase tracking-wider rounded bg-fiber-dark/80 text-fiber-muted hover:text-red-400 hover:bg-red-500/10 border border-fiber-border hover:border-red-500/30 transition-all"
                       >
                         Cancel
                       </button>
@@ -375,7 +384,7 @@ export function NodeStatus({
                 <button
                   onClick={onCheckRoute}
                   disabled={isChannelBusy}
-                  className="flex-1 py-2 px-3 min-h-12 text-xs font-mono uppercase tracking-wider rounded-lg bg-fiber-dark/50 text-fiber-muted hover:text-fiber-accent hover:bg-fiber-accent/10 border border-fiber-border hover:border-fiber-accent/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 py-2.5 px-3 min-h-12 text-xs font-mono uppercase tracking-wider rounded-lg bg-fiber-accent/20 text-white/95 hover:text-white hover:bg-fiber-accent/30 border border-fiber-accent/60 shadow-[0_0_0_1px_rgba(0,255,163,0.08)] hover:shadow-[0_0_20px_rgba(0,255,163,0.22)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {channelStatus === 'ready' ? 'Re-check' : 'Check Route'}
                 </button>
@@ -385,7 +394,7 @@ export function NodeStatus({
                 <button
                   onClick={onOpenChannel}
                   disabled={shouldDisableOpenChannel}
-                  className="flex-1 py-2 px-3 min-h-12 text-xs font-mono uppercase tracking-wider rounded-lg bg-fiber-accent/20 text-fiber-accent hover:bg-fiber-accent/30 border border-fiber-accent/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 py-2.5 px-3 min-h-12 text-xs font-mono uppercase tracking-wider rounded-lg bg-fiber-accent/25 text-fiber-accent hover:bg-fiber-accent/35 border border-fiber-accent/70 shadow-[0_0_20px_rgba(0,255,163,0.16)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Open Channel
                 </button>

@@ -100,6 +100,8 @@ export function ConnectionErrorModal({ isOpen, onClose, error, rpcUrl }: Connect
   const config = errorConfig[errorType];
   const { Icon } = config;
 
+  const recipientMultiaddr = process.env.NEXT_PUBLIC_RECIPIENT_MULTIADDR || '';
+
   if (!mounted) return null;
 
   return createPortal(
@@ -139,7 +141,7 @@ export function ConnectionErrorModal({ isOpen, onClose, error, rpcUrl }: Connect
                   </div>
                   <button
                     onClick={onClose}
-                    className="p-2 rounded-lg text-fiber-muted hover:text-white hover:bg-fiber-border/50 transition-colors"
+                    className="p-2 rounded-lg text-fiber-muted/95 hover:text-white hover:bg-fiber-border/50 transition-colors"
                   >
                     <XIcon />
                   </button>
@@ -151,13 +153,18 @@ export function ConnectionErrorModal({ isOpen, onClose, error, rpcUrl }: Connect
                   <div className={`p-4 rounded-xl ${config.bgColor} ${config.borderColor} border`}>
                     <p className={`text-sm ${config.color}`}>{config.description}</p>
                     {error && (
-                      <p className="mt-2 text-xs font-mono text-white/60 bg-black/20 p-2 rounded">
+                      <p className="mt-2 text-xs font-mono text-white/90 bg-black/30 p-2 rounded">
                         {error}
                       </p>
                     )}
-                    <p className='mt-2 text-xs font-mono text-white/60 bg-black/20 p-2 rounded'>
-                      Make sure your Fiber node is running with COR-enabled at: <code className="text-fiber-accent">{rpcUrl}</code>
+                    <p className='mt-2 text-xs font-mono text-white/90 bg-black/30 p-2 rounded'>
+                      Make sure your Fiber node is running with CORS enabled at: <code className="text-fiber-accent">{rpcUrl}</code>
                     </p>
+                    {!recipientMultiaddr.trim() && (
+                      <p className="mt-2 text-xs font-mono text-fiber-warning bg-fiber-warning/10 border border-fiber-warning/30 p-2 rounded">
+                        For users without bootnode peers, set NEXT_PUBLIC_RECIPIENT_MULTIADDR to enable automatic peer bootstrap in the frontend.
+                      </p>
+                    )}
                   </div>
 
                   {/* Setup Instructions */}
@@ -168,31 +175,31 @@ export function ConnectionErrorModal({ isOpen, onClose, error, rpcUrl }: Connect
                     </div>
 
                     <div className="p-4 rounded-xl bg-fiber-dark/30 border border-fiber-border/50 space-y-3">
-                      <p className="text-sm text-fiber-muted">
+                      <p className="text-sm text-fiber-muted/95">
                         You can run a local Fiber node using the{' '}
                         <span className="text-fiber-accent font-medium">fiber-pay</span> CLI tool:
                       </p>
 
                       <div className="space-y-2">
-                        <p className="text-xs font-mono uppercase tracking-wider text-fiber-muted">1. Install</p>
+                        <p className="text-xs font-mono uppercase tracking-wider text-fiber-muted/95">1. Install</p>
                         <div className="relative">
-                          <pre className="p-3 rounded-lg bg-black/40 text-xs font-mono text-white/80 overflow-x-auto">
+                          <pre className="p-3 rounded-lg bg-black/40 text-xs font-mono text-white/90 overflow-x-auto">
                             npm install -g @fiber-pay/cli@next
                           </pre>
                         </div>
                       </div>
 
                       <div className="space-y-2">
-                        <p className="text-xs font-mono uppercase tracking-wider text-fiber-muted">2. Start the node</p>
+                        <p className="text-xs font-mono uppercase tracking-wider text-fiber-muted/95">2. Start the node</p>
                         <div className="relative">
-                          <pre className="p-3 rounded-lg bg-black/40 text-xs font-mono text-white/80 overflow-x-auto">
+                          <pre className="p-3 rounded-lg bg-black/40 text-xs font-mono text-white/90 overflow-x-auto">
                             fiber-pay node start
                           </pre>
                         </div>
                       </div>
 
                       <div className="space-y-2">
-                        <p className="text-xs text-fiber-muted">
+                        <p className="text-xs text-fiber-muted/95">
                           3. Use this RPC endpoint in the player:{' '}
                           <code>http://127.0.0.1:8229</code>
                           {' '}via fiber-pay runtime proxy for CORS support
@@ -206,7 +213,7 @@ export function ConnectionErrorModal({ isOpen, onClose, error, rpcUrl }: Connect
                 <div className="flex items-center justify-end gap-3 p-5 border-t border-fiber-border bg-fiber-dark/20 flex-shrink-0">
                   <button
                     onClick={onClose}
-                    className="px-4 py-2 text-sm font-medium text-white/70 hover:text-white transition-colors"
+                    className="px-4 py-2 text-sm font-medium text-white/85 hover:text-white transition-colors"
                   >
                     Close
                   </button>

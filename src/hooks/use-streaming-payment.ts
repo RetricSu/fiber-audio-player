@@ -46,7 +46,13 @@ export function useStreamingPayment(
       unsubscribe();
       service.stopStreaming();
     };
-  }, [config.rpcUrl, config.recipientPubkey, config.ratePerSecond]);
+  }, [
+    config.rpcUrl,
+    config.recipientPubkey,
+    config.ratePerSecond,
+    config.paymentIntervalMs,
+    config.currency,
+  ]);
 
   const start = useCallback(async (): Promise<boolean> => {
     if (!serviceRef.current) return false;

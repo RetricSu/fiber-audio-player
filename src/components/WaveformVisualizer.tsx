@@ -101,7 +101,7 @@ export function WaveformVisualizer({
       {/* Hover time indicator */}
       <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full pb-2">
-          <div className="bg-fiber-surface/90 backdrop-blur-sm px-2 py-1 rounded text-xs font-mono text-fiber-muted border border-fiber-border">
+          <div className="bg-fiber-surface/90 backdrop-blur-sm px-2 py-1 rounded text-xs font-mono text-fiber-muted/95 border border-fiber-border">
             Click to seek
           </div>
         </div>

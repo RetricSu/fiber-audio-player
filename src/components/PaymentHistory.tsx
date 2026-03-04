@@ -12,14 +12,14 @@ export function PaymentHistory({ payments }: PaymentHistoryProps) {
   const recentPayments = payments.slice(-10).reverse();
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-fiber-surface/50 backdrop-blur-sm border border-fiber-border">
+    <div className="relative overflow-hidden rounded-2xl bg-fiber-surface/85 backdrop-blur-sm border border-fiber-border/90">
       {/* Header */}
       <div className="px-5 py-4 border-b border-fiber-border/50">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-mono uppercase tracking-wider text-fiber-muted">
+          <h3 className="text-sm font-mono uppercase tracking-wider text-fiber-muted/95">
             Payment History
           </h3>
-          <span className="text-xs font-mono text-fiber-muted">
+          <span className="text-xs font-mono text-fiber-muted/95">
             {payments.length} total
           </span>
         </div>
@@ -55,7 +55,7 @@ export function PaymentHistory({ payments }: PaymentHistoryProps) {
                     />
 
                     {/* Time */}
-                    <span className="text-xs font-mono text-fiber-muted w-16">
+                    <span className="text-xs font-mono text-fiber-muted/95 w-16">
                       {new Date(payment.timestamp).toLocaleTimeString('en-US', {
                         hour12: false,
                         hour: '2-digit',
@@ -66,7 +66,7 @@ export function PaymentHistory({ payments }: PaymentHistoryProps) {
 
                     {/* Payment hash preview */}
                     {payment.paymentHash && (
-                      <span className="text-[10px] font-mono text-fiber-muted/60 hidden sm:block">
+                      <span className="text-xs font-mono text-fiber-muted/80 hidden sm:block">
                         {payment.paymentHash.slice(0, 10)}...
                       </span>
                     )}
@@ -87,7 +87,7 @@ export function PaymentHistory({ payments }: PaymentHistoryProps) {
                     >
                       -{formatShannon(payment.amountShannon, 6)}
                     </motion.span>
-                    <span className="text-[10px] text-fiber-muted">CKB</span>
+                    <span className="text-xs text-fiber-muted/95">CKB</span>
                   </div>
                 </motion.div>
               ))}
@@ -109,7 +109,7 @@ export function PaymentHistory({ payments }: PaymentHistoryProps) {
                   />
                 </svg>
               </div>
-              <p className="text-sm text-fiber-muted">
+              <p className="text-sm text-fiber-muted/95">
                 No payments yet. Start playing to stream payments.
               </p>
             </div>

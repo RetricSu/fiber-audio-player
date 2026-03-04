@@ -52,6 +52,13 @@ cp .env.local.example .env.local
 
 # Edit .env.local and set your Fiber node pubkey
 NEXT_PUBLIC_RECIPIENT_PUBKEY=03abc...your_pubkey_hex
+
+# Optional but recommended: recipient node multiaddr for frontend auto-bootstrap
+# (helps listeners whose local node has no bootnode peers yet)
+NEXT_PUBLIC_RECIPIENT_MULTIADDR=/ip4/127.0.0.1/tcp/8228/p2p/Qm...
+
+# Optional: payment tick interval in milliseconds (default 10000 = 10 seconds)
+NEXT_PUBLIC_PAYMENT_INTERVAL_MS=10000
 ```
 
 **For listeners**, configure your Fiber node RPC URL in the app UI (default: `http://127.0.0.1:8229`).
@@ -141,7 +148,7 @@ src/
 
 1. User clicks play → Audio starts
 2. `StreamingPaymentService` starts tracking playback time
-3. Every 5 seconds (configurable), accumulated time is calculated
+3. Every 10 seconds by default (configurable), accumulated time is calculated
 4. Keysend payment is sent via Fiber RPC for the listened duration
 5. Payment status is tracked and displayed in the UI
 6. User clicks pause → Payment streaming stops

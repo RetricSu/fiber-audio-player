@@ -26,21 +26,31 @@ const DEMO_EPISODE = {
 // Default configuration
 const DEFAULT_RPC_URL = 'http://127.0.0.1:8229';
 const FAUCET_URL = 'https://testnet.ckbapp.dev/';
+const DEFAULT_PAYMENT_INTERVAL_MS = 10000;
 
 // Recipient pubkey is fixed at deploy time by the podcast owner
 const RECIPIENT_PUBKEY = process.env.NEXT_PUBLIC_RECIPIENT_PUBKEY || '';
+const RECIPIENT_MULTIADDR = process.env.NEXT_PUBLIC_RECIPIENT_MULTIADDR || '';
+const parsedPaymentInterval = Number(process.env.NEXT_PUBLIC_PAYMENT_INTERVAL_MS || DEFAULT_PAYMENT_INTERVAL_MS);
+const PAYMENT_INTERVAL_MS =
+  Number.isFinite(parsedPaymentInterval) && parsedPaymentInterval > 0
+    ? parsedPaymentInterval
+    : DEFAULT_PAYMENT_INTERVAL_MS;
 
 export default function Home() {
   const [rpcUrl, setRpcUrl] = useState(DEFAULT_RPC_URL);
 
-  const fiberNode = useFiberNode(rpcUrl);
+  const fiberNode = useFiberNode(rpcUrl, {
+    recipientPubkey: RECIPIENT_PUBKEY,
+    recipientMultiaddr: RECIPIENT_MULTIADDR,
+  });
 
   // For payment history, we need to track payments
   const payment = useStreamingPayment({
     rpcUrl,
     recipientPubkey: RECIPIENT_PUBKEY,
     ratePerSecond: DEMO_EPISODE.pricePerSecond,
-    paymentIntervalMs: 1000,
+    paymentIntervalMs: PAYMENT_INTERVAL_MS,
   });
 
   return (
@@ -76,7 +86,7 @@ export default function Home() {
                 transition={{ duration: 2, repeat: Infinity }}
               />
             </div>
-            <span className="text-sm font-mono uppercase tracking-wider text-fiber-muted">
+            <span className="text-sm font-mono uppercase tracking-wider text-fiber-muted/95">
               Fiber Audio
             </span>
           </div>
@@ -88,7 +98,7 @@ export default function Home() {
             <span className="text-white/90">.</span>
           </h1>
 
-          <p className="text-fiber-muted max-w-xl mx-auto">
+          <p className="text-white/90 max-w-xl mx-auto">
             Experience the future of content monetization. Pay only for what you listen to,
             streamed in real-time through Fiber Network.
           </p>
@@ -141,13 +151,14 @@ export default function Home() {
                 fundingBalanceError={fiberNode.fundingBalanceError}
                 faucetUrl={FAUCET_URL}
                 recipientPubkey={RECIPIENT_PUBKEY}
+                recipientMultiaddrConfigured={Boolean(RECIPIENT_MULTIADDR.trim())}
                 onCheckRoute={() => fiberNode.checkPaymentRoute(RECIPIENT_PUBKEY)}
                 onOpenChannel={() => fiberNode.setupChannel(RECIPIENT_PUBKEY)}
                 onCancelSetup={fiberNode.cancelChannelSetup}
                 topConfigPanel={
                   !fiberNode.isConnected ? (
                     <div>
-                      <label className="block text-xs text-fiber-muted mb-2 font-mono uppercase tracking-wider">
+                      <label className="block text-xs text-fiber-muted/95 mb-2 font-mono uppercase tracking-wider">
                         Fiber RPC URL
                       </label>
                       <input
@@ -178,7 +189,7 @@ export default function Home() {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.6, delay: 0.5 }}
         >
-          <div className="inline-flex items-center gap-6 text-xs text-fiber-muted">
+          <div className="inline-flex items-center gap-6 text-xs text-fiber-muted/95">
             <span>Powered by Fiber Network</span>
             <span className="w-1 h-1 rounded-full bg-fiber-border" />
             <span>Built on CKB</span>
