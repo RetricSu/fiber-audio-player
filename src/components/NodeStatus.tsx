@@ -3,7 +3,7 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { ChannelStatus } from '@/hooks/use-fiber-node';
-import { NodeInfo, fromHex } from '@/lib/fiber-rpc';
+import { NodeInfo } from '@/lib/fiber-rpc';
 import { ConnectionErrorModal } from './ConnectionErrorModal';
 
 interface NodeStatusProps {
@@ -20,6 +20,13 @@ interface NodeStatusProps {
   channelStateName?: string | null;
   channelElapsed?: number;
   availableBalance?: string;
+  channelCount?: number;
+  peerCount?: number;
+  fundingAmountCkb?: number;
+  fundingBalanceCkb?: number | null;
+  isFundingSufficient?: boolean;
+  fundingBalanceError?: string | null;
+  faucetUrl?: string;
   onCheckRoute?: () => void;
   onOpenChannel?: () => void;
   onCancelSetup?: () => void;
@@ -40,6 +47,13 @@ export function NodeStatus({
   channelStateName,
   channelElapsed = 0,
   availableBalance = '0',
+  channelCount = 0,
+  peerCount = 0,
+  fundingAmountCkb = 1000,
+  fundingBalanceCkb = null,
+  isFundingSufficient = false,
+  fundingBalanceError,
+  faucetUrl,
   onCheckRoute,
   onOpenChannel,
   onCancelSetup,
@@ -76,6 +90,7 @@ export function NodeStatus({
 
   const channelStatusDisplay = getChannelStatusDisplay();
   const isChannelBusy = channelStatus === 'checking' || channelStatus === 'opening_channel' || channelStatus === 'waiting_confirmation';
+  const shouldDisableOpenChannel = isChannelBusy || !isFundingSufficient;
 
   return (
     <div className="relative overflow-visible rounded-2xl bg-fiber-surface/50 backdrop-blur-sm border border-fiber-border p-5">
@@ -169,7 +184,7 @@ export function NodeStatus({
                   Channels
                 </p>
                 <p className="text-xl font-display text-white">
-                  {Number(fromHex(nodeInfo.channel_count))}
+                  {channelCount}
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-fiber-dark/50">
@@ -177,10 +192,37 @@ export function NodeStatus({
                   Peers
                 </p>
                 <p className="text-xl font-display text-white">
-                  {Number(fromHex(nodeInfo.peers_count))}
+                  {peerCount}
                 </p>
               </div>
             </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 rounded-lg bg-fiber-dark/50">
+                <p className="text-[10px] text-fiber-muted font-mono uppercase tracking-wider mb-1">
+                  Funding Amount
+                </p>
+                <p className="text-sm font-display text-white">
+                  {fundingAmountCkb} CKB
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-fiber-dark/50">
+                <p className="text-[10px] text-fiber-muted font-mono uppercase tracking-wider mb-1">
+                  Funding Balance
+                </p>
+                <p className="text-sm font-display text-white">
+                  {fundingBalanceCkb === null ? 'N/A' : `${fundingBalanceCkb.toFixed(4)} CKB`}
+                </p>
+              </div>
+            </div>
+
+            {fundingBalanceError && (
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+                <p className="text-xs text-red-400 font-mono">
+                  Funding balance check failed: {fundingBalanceError}
+                </p>
+              </div>
+            )}
 
             <div className="p-3 rounded-lg bg-fiber-dark/50">
               <p className="text-[10px] text-fiber-muted font-mono uppercase tracking-wider mb-1">
@@ -307,12 +349,33 @@ export function NodeStatus({
               </motion.div>
             )}
 
-            <div className="flex gap-2">
+            {!isFundingSufficient && (channelStatus === 'no_route' || channelStatus === 'error') && (
+              <div className="mb-2 p-2 rounded-lg bg-red-500/10 border border-red-500/30">
+                <p className="text-xs text-red-400">
+                  Funding balance is below {fundingAmountCkb} CKB. Please top up from faucet first before opening a channel.
+                  {faucetUrl && (
+                    <>
+                      {' '}
+                      <a
+                        href={faucetUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline text-red-300 hover:text-red-200"
+                      >
+                        Go to faucet
+                      </a>
+                    </>
+                  )}
+                </p>
+              </div>
+            )}
+
+            <div className="flex items-stretch gap-2">
               {onCheckRoute && (
                 <button
                   onClick={onCheckRoute}
                   disabled={isChannelBusy}
-                  className="flex-1 py-2 px-3 text-xs font-mono uppercase tracking-wider rounded-lg bg-fiber-dark/50 text-fiber-muted hover:text-fiber-accent hover:bg-fiber-accent/10 border border-fiber-border hover:border-fiber-accent/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 py-2 px-3 min-h-12 text-xs font-mono uppercase tracking-wider rounded-lg bg-fiber-dark/50 text-fiber-muted hover:text-fiber-accent hover:bg-fiber-accent/10 border border-fiber-border hover:border-fiber-accent/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {channelStatus === 'ready' ? 'Re-check' : 'Check Route'}
                 </button>
@@ -321,8 +384,8 @@ export function NodeStatus({
               {onOpenChannel && (channelStatus === 'no_route' || channelStatus === 'error') && (
                 <button
                   onClick={onOpenChannel}
-                  disabled={isChannelBusy}
-                  className="flex-1 py-2 px-3 text-xs font-mono uppercase tracking-wider rounded-lg bg-fiber-accent/20 text-fiber-accent hover:bg-fiber-accent/30 border border-fiber-accent/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={shouldDisableOpenChannel}
+                  className="flex-1 py-2 px-3 min-h-12 text-xs font-mono uppercase tracking-wider rounded-lg bg-fiber-accent/20 text-fiber-accent hover:bg-fiber-accent/30 border border-fiber-accent/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Open Channel
                 </button>

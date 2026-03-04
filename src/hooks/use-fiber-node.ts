@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import { FiberRpcClient, NodeInfo, Channel, PeerInfo, ChannelState, toHex, ckbToShannon, formatShannon } from '@/lib/fiber-rpc';
+import { FiberRpcClient, NodeInfo, Channel, PeerInfo, ChannelState, toHex, fromHex, ckbToShannon, formatShannon } from '@/lib/fiber-rpc';
 
 export type ChannelStatus =
   | 'idle'
@@ -28,12 +28,29 @@ export interface UseFiberNodeResult {
   channelStateName: string | null;
   channelElapsed: number;
   availableBalance: string;
+  fundingAmountCkb: number;
+  fundingBalanceCkb: number | null;
+  isFundingSufficient: boolean;
+  fundingBalanceError: string | null;
   checkPaymentRoute: (recipientPubkey: string, amount?: number) => Promise<boolean>;
   setupChannel: (recipientPubkey: string, fundingAmountCkb?: number) => Promise<boolean>;
   cancelChannelSetup: () => void;
 }
 
-const DEFAULT_FUNDING_AMOUNT_CKB = 100; // 100 CKB default funding
+const DEFAULT_FUNDING_AMOUNT_CKB = 1000; // 1000 CKB default funding
+const CKB_RPC_URL = 'https://testnet.ckbapp.dev/';
+
+interface GetCellsCapacityResult {
+  capacity: `0x${string}`;
+}
+
+interface JsonRpcResponse<T> {
+  result?: T;
+  error?: {
+    code: number;
+    message: string;
+  };
+}
 
 export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
   const [isConnected, setIsConnected] = useState(false);
@@ -50,6 +67,8 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
   const [channelStateName, setChannelStateName] = useState<string | null>(null);
   const [channelElapsed, setChannelElapsed] = useState(0);
   const [availableBalance, setAvailableBalance] = useState('0');
+  const [fundingBalanceCkb, setFundingBalanceCkb] = useState<number | null>(null);
+  const [fundingBalanceError, setFundingBalanceError] = useState<string | null>(null);
   const channelSetupCanceledRef = useRef(false);
   const channelTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -69,6 +88,55 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
     }, 1000);
   }, [clearChannelTimer]);
 
+  const fetchFundingBalance = useCallback(async (info: NodeInfo) => {
+    try {
+      const response = await fetch(CKB_RPC_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: 1,
+          jsonrpc: '2.0',
+          method: 'get_cells_capacity',
+          params: [
+            {
+              script: info.default_funding_lock_script,
+              script_type: 'lock',
+            },
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`CKB RPC HTTP ${response.status}`);
+      }
+
+      const payload = (await response.json()) as JsonRpcResponse<GetCellsCapacityResult>;
+      if (payload.error) {
+        throw new Error(payload.error.message || 'CKB RPC error');
+      }
+
+      const capacityHex = payload.result?.capacity;
+      if (!capacityHex) {
+        throw new Error('No capacity returned from CKB RPC');
+      }
+
+      const capacityShannon = fromHex(capacityHex);
+      const capacityCkb = Number(capacityShannon) / 100_000_000;
+
+      if (!Number.isFinite(capacityCkb)) {
+        throw new Error('Invalid funding balance from CKB RPC');
+      }
+
+      setFundingBalanceCkb(capacityCkb);
+      setFundingBalanceError(null);
+    } catch (err) {
+      setFundingBalanceCkb(null);
+      setFundingBalanceError(err instanceof Error ? err.message : 'Failed to fetch funding balance');
+    }
+  }, []);
+
   const connect = useCallback(async () => {
     setIsConnecting(true);
     setError(null);
@@ -79,6 +147,7 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
 
       const info = await client.nodeInfo();
       setNodeInfo(info);
+      await fetchFundingBalance(info);
 
       const channelResult = await client.listChannels();
       setChannels(channelResult.channels || []);
@@ -93,7 +162,7 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
     } finally {
       setIsConnecting(false);
     }
-  }, [rpcUrl]);
+  }, [fetchFundingBalance, rpcUrl]);
 
   const disconnect = useCallback(() => {
     clientRef.current = null;
@@ -109,6 +178,8 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
     channelSetupCanceledRef.current = false;
     clearChannelTimer();
     setAvailableBalance('0');
+    setFundingBalanceCkb(null);
+    setFundingBalanceError(null);
   }, [clearChannelTimer]);
 
   const refresh = useCallback(async () => {
@@ -117,6 +188,7 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
     try {
       const info = await clientRef.current.nodeInfo();
       setNodeInfo(info);
+      await fetchFundingBalance(info);
 
       const channelResult = await clientRef.current.listChannels();
       setChannels(channelResult.channels || []);
@@ -126,7 +198,7 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh');
     }
-  }, []);
+  }, [fetchFundingBalance]);
 
   const checkPaymentRoute = useCallback(
     async (recipientPubkey: string, amount: number = 0.01): Promise<boolean> => {
@@ -214,6 +286,15 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
 
       if (!recipientPubkey.trim()) {
         setChannelError('Select a recipient peer or enter a recipient public key first.');
+        setChannelStatus('error');
+        return false;
+      }
+
+      if (fundingBalanceCkb !== null && fundingBalanceCkb < fundingAmountCkb) {
+        setChannelError(
+          `Insufficient funding balance (${fundingBalanceCkb.toFixed(4)} CKB). ` +
+          `Need ${fundingAmountCkb} CKB. Please top up from faucet first.`
+        );
         setChannelStatus('error');
         return false;
       }
@@ -327,8 +408,11 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
         return false;
       }
     },
-    [clearChannelTimer, startChannelTimer]
+    [clearChannelTimer, fundingBalanceCkb, startChannelTimer]
   );
+
+  const isFundingSufficient =
+    fundingBalanceCkb !== null && fundingBalanceCkb >= DEFAULT_FUNDING_AMOUNT_CKB;
 
   return {
     isConnected,
@@ -345,6 +429,10 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
     channelStateName,
     channelElapsed,
     availableBalance,
+    fundingAmountCkb: DEFAULT_FUNDING_AMOUNT_CKB,
+    fundingBalanceCkb,
+    isFundingSufficient,
+    fundingBalanceError,
     checkPaymentRoute,
     setupChannel,
     cancelChannelSetup,

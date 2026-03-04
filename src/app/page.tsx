@@ -25,6 +25,7 @@ const DEMO_EPISODE = {
 
 // Default configuration
 const DEFAULT_RPC_URL = 'http://127.0.0.1:8229';
+const FAUCET_URL = 'https://testnet.ckbapp.dev/';
 
 // Recipient pubkey is fixed at deploy time by the podcast owner
 const RECIPIENT_PUBKEY = process.env.NEXT_PUBLIC_RECIPIENT_PUBKEY || '';
@@ -131,6 +132,13 @@ export default function Home() {
                 channelStateName={fiberNode.channelStateName}
                 channelElapsed={fiberNode.channelElapsed}
                 availableBalance={fiberNode.availableBalance}
+                channelCount={fiberNode.channels.length}
+                peerCount={fiberNode.peers.length}
+                fundingAmountCkb={fiberNode.fundingAmountCkb}
+                fundingBalanceCkb={fiberNode.fundingBalanceCkb}
+                isFundingSufficient={fiberNode.isFundingSufficient}
+                fundingBalanceError={fiberNode.fundingBalanceError}
+                faucetUrl={FAUCET_URL}
                 recipientPubkey={RECIPIENT_PUBKEY}
                 onCheckRoute={() => fiberNode.checkPaymentRoute(RECIPIENT_PUBKEY)}
                 onOpenChannel={() => fiberNode.setupChannel(RECIPIENT_PUBKEY)}
