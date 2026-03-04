@@ -100,6 +100,8 @@ export function ConnectionErrorModal({ isOpen, onClose, error, rpcUrl }: Connect
   const config = errorConfig[errorType];
   const { Icon } = config;
 
+  const recipientMultiaddr = process.env.NEXT_PUBLIC_RECIPIENT_MULTIADDR || '';
+
   if (!mounted) return null;
 
   return createPortal(
@@ -151,13 +153,18 @@ export function ConnectionErrorModal({ isOpen, onClose, error, rpcUrl }: Connect
                   <div className={`p-4 rounded-xl ${config.bgColor} ${config.borderColor} border`}>
                     <p className={`text-sm ${config.color}`}>{config.description}</p>
                     {error && (
-                      <p className="mt-2 text-xs font-mono text-white/60 bg-black/20 p-2 rounded">
+                      <p className="mt-2 text-xs font-mono text-white/80 bg-black/30 p-2 rounded">
                         {error}
                       </p>
                     )}
-                    <p className='mt-2 text-xs font-mono text-white/60 bg-black/20 p-2 rounded'>
-                      Make sure your Fiber node is running with COR-enabled at: <code className="text-fiber-accent">{rpcUrl}</code>
+                    <p className='mt-2 text-xs font-mono text-white/80 bg-black/30 p-2 rounded'>
+                      Make sure your Fiber node is running with CORS enabled at: <code className="text-fiber-accent">{rpcUrl}</code>
                     </p>
+                    {!recipientMultiaddr.trim() && (
+                      <p className="mt-2 text-xs font-mono text-fiber-warning bg-fiber-warning/10 border border-fiber-warning/30 p-2 rounded">
+                        For users without bootnode peers, set NEXT_PUBLIC_RECIPIENT_MULTIADDR to enable automatic peer bootstrap in the frontend.
+                      </p>
+                    )}
                   </div>
 
                   {/* Setup Instructions */}

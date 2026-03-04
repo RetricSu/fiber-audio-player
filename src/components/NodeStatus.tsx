@@ -31,6 +31,7 @@ interface NodeStatusProps {
   onOpenChannel?: () => void;
   onCancelSetup?: () => void;
   recipientPubkey?: string;
+  recipientMultiaddrConfigured?: boolean;
   topConfigPanel?: ReactNode;
 }
 
@@ -58,6 +59,7 @@ export function NodeStatus({
   onOpenChannel,
   onCancelSetup,
   recipientPubkey,
+  recipientMultiaddrConfigured = false,
   topConfigPanel,
 }: NodeStatusProps) {
   const [showErrorModal, setShowErrorModal] = useState(false);
@@ -93,7 +95,7 @@ export function NodeStatus({
   const shouldDisableOpenChannel = isChannelBusy || !isFundingSufficient;
 
   return (
-    <div className="relative overflow-visible rounded-2xl bg-fiber-surface/50 backdrop-blur-sm border border-fiber-border p-5">
+    <div className="relative overflow-visible rounded-2xl bg-fiber-surface/70 backdrop-blur-sm border border-fiber-border p-5">
       {/* Background pattern */}
       <div className="absolute inset-0 opacity-5">
         <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -133,7 +135,7 @@ export function NodeStatus({
                   />
                 )}
               </div>
-              <h3 className="text-sm font-mono uppercase tracking-wider text-fiber-muted">
+              <h3 className="text-sm font-mono uppercase tracking-wider text-fiber-muted/90">
                 Fiber Node
               </h3>
             </div>
@@ -166,7 +168,7 @@ export function NodeStatus({
             >
               <div className="flex items-center justify-between">
                 <p className="text-xs text-red-400 font-mono">{error}</p>
-                <span className="text-[10px] text-red-400/60 font-mono">Click for help →</span>
+                <span className="text-xs text-red-300/70 font-mono">Click for help →</span>
               </div>
             </motion.div>
           )}
@@ -180,7 +182,7 @@ export function NodeStatus({
             >
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 rounded-lg bg-fiber-dark/50">
-                <p className="text-[10px] text-fiber-muted font-mono uppercase tracking-wider mb-1">
+                <p className="text-xs text-fiber-muted font-mono uppercase tracking-wider mb-1">
                   Channels
                 </p>
                 <p className="text-xl font-display text-white">
@@ -188,7 +190,7 @@ export function NodeStatus({
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-fiber-dark/50">
-                <p className="text-[10px] text-fiber-muted font-mono uppercase tracking-wider mb-1">
+                <p className="text-xs text-fiber-muted font-mono uppercase tracking-wider mb-1">
                   Peers
                 </p>
                 <p className="text-xl font-display text-white">
@@ -199,7 +201,7 @@ export function NodeStatus({
 
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 rounded-lg bg-fiber-dark/50">
-                <p className="text-[10px] text-fiber-muted font-mono uppercase tracking-wider mb-1">
+                <p className="text-xs text-fiber-muted font-mono uppercase tracking-wider mb-1">
                   Funding Amount
                 </p>
                 <p className="text-sm font-display text-white">
@@ -207,7 +209,7 @@ export function NodeStatus({
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-fiber-dark/50">
-                <p className="text-[10px] text-fiber-muted font-mono uppercase tracking-wider mb-1">
+                <p className="text-xs text-fiber-muted font-mono uppercase tracking-wider mb-1">
                   Funding Balance
                 </p>
                 <p className="text-sm font-display text-white">
@@ -225,7 +227,7 @@ export function NodeStatus({
             )}
 
             <div className="p-3 rounded-lg bg-fiber-dark/50">
-              <p className="text-[10px] text-fiber-muted font-mono uppercase tracking-wider mb-1">
+              <p className="text-xs text-fiber-muted font-mono uppercase tracking-wider mb-1">
                 Node ID
               </p>
               <p className="text-xs font-mono text-white/70 truncate">
@@ -235,14 +237,14 @@ export function NodeStatus({
 
             {nodeInfo.node_name && (
               <div className="p-3 rounded-lg bg-fiber-dark/50">
-                <p className="text-[10px] text-fiber-muted font-mono uppercase tracking-wider mb-1">
+                <p className="text-xs text-fiber-muted font-mono uppercase tracking-wider mb-1">
                   Name
                 </p>
                 <p className="text-sm font-mono text-white/90">{nodeInfo.node_name}</p>
               </div>
             )}
 
-            <div className="flex items-center justify-between text-[10px] font-mono text-fiber-muted">
+            <div className="flex items-center justify-between text-xs font-mono text-fiber-muted">
               <span>v{nodeInfo.version}</span>
               <span className="text-fiber-accent">● LIVE</span>
             </div>
@@ -274,7 +276,7 @@ export function NodeStatus({
         {/* Recipient pubkey (read-only, set by deployer) */}
         {recipientPubkey && (
           <div className="mt-4 p-3 rounded-lg bg-fiber-dark/50">
-            <p className="text-[10px] text-fiber-muted font-mono uppercase tracking-wider mb-1">
+            <p className="text-xs text-fiber-muted font-mono uppercase tracking-wider mb-1">
               Paying To
             </p>
             <p className="text-xs font-mono text-white/70 truncate" title={recipientPubkey}>
@@ -286,6 +288,13 @@ export function NodeStatus({
           <div className="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
             <p className="text-xs text-red-400 font-mono">
               Recipient pubkey not configured. The site owner needs to set NEXT_PUBLIC_RECIPIENT_PUBKEY.
+            </p>
+          </div>
+        )}
+        {recipientPubkey && isConnected && !recipientMultiaddrConfigured && (
+          <div className="mt-3 p-3 rounded-lg bg-fiber-warning/10 border border-fiber-warning/30">
+            <p className="text-xs text-fiber-warning font-mono">
+              Auto peer bootstrap disabled. Set NEXT_PUBLIC_RECIPIENT_MULTIADDR so users without bootnodes can connect automatically.
             </p>
           </div>
         )}
@@ -326,7 +335,7 @@ export function NodeStatus({
                 {channelStatus === 'waiting_confirmation' && (
                   <div className="space-y-1.5">
                     {channelStateName && (
-                      <p className="text-[10px] font-mono text-fiber-muted">
+                      <p className="text-xs font-mono text-fiber-muted">
                         State: <span className="text-white/70">{channelStateName}</span>
                       </p>
                     )}
@@ -336,7 +345,7 @@ export function NodeStatus({
                     {onCancelSetup && (
                       <button
                         onClick={onCancelSetup}
-                        className="mt-1.5 px-2 py-1 text-[10px] font-mono uppercase tracking-wider rounded bg-fiber-dark/80 text-fiber-muted hover:text-red-400 hover:bg-red-500/10 border border-fiber-border hover:border-red-500/30 transition-all"
+                        className="mt-1.5 px-2 py-1 text-xs font-mono uppercase tracking-wider rounded bg-fiber-dark/80 text-fiber-muted hover:text-red-400 hover:bg-red-500/10 border border-fiber-border hover:border-red-500/30 transition-all"
                       >
                         Cancel
                       </button>

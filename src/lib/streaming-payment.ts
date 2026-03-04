@@ -39,7 +39,7 @@ export class StreamingPaymentService {
   constructor(config: StreamingPaymentConfig) {
     this.config = {
       ...config,
-      paymentIntervalMs: config.paymentIntervalMs || 1000, // Default: pay every 1 second
+      paymentIntervalMs: config.paymentIntervalMs || 10000, // Default: pay every 10 seconds
       currency: config.currency || 'Fibd',
     };
     this.client = new FiberRpcClient({ url: config.rpcUrl });

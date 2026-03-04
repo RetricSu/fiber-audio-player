@@ -52,7 +52,14 @@ interface JsonRpcResponse<T> {
   };
 }
 
-export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
+interface UseFiberNodeOptions {
+  recipientPubkey?: string;
+  recipientMultiaddr?: string;
+}
+
+export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}): UseFiberNodeResult {
+  const recipientPubkey = options.recipientPubkey?.trim() || '';
+  const recipientMultiaddr = options.recipientMultiaddr?.trim() || '';
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [nodeInfo, setNodeInfo] = useState<NodeInfo | null>(null);
@@ -137,6 +144,43 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
     }
   }, []);
 
+  const ensureRecipientPeerConnected = useCallback(
+    async (targetPubkey: string): Promise<boolean> => {
+      const client = clientRef.current;
+      const normalizedTarget = targetPubkey.trim();
+      if (!client || !normalizedTarget) {
+        return false;
+      }
+
+      const existingPeerId = await client.findPeerIdByPubkey(normalizedTarget);
+      if (existingPeerId) {
+        return true;
+      }
+
+      if (!recipientMultiaddr) {
+        return false;
+      }
+
+      try {
+        await client.connectPeer({ address: recipientMultiaddr, save: true });
+      } catch {
+        // Continue retry checks below; peer may already be connected while RPC returns an error.
+      }
+
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const peerId = await client.findPeerIdByPubkey(normalizedTarget);
+        if (peerId) {
+          return true;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
+      return false;
+    },
+    [recipientMultiaddr]
+  );
+
   const connect = useCallback(async () => {
     setIsConnecting(true);
     setError(null);
@@ -155,6 +199,14 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
       const peersResult = await client.listPeers();
       setPeers(peersResult.peers || []);
 
+      if (recipientPubkey) {
+        const autoConnected = await ensureRecipientPeerConnected(recipientPubkey);
+        if (autoConnected) {
+          const refreshedPeersResult = await client.listPeers();
+          setPeers(refreshedPeersResult.peers || []);
+        }
+      }
+
       setIsConnected(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to connect to Fiber node');
@@ -162,7 +214,7 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
     } finally {
       setIsConnecting(false);
     }
-  }, [fetchFundingBalance, rpcUrl]);
+  }, [ensureRecipientPeerConnected, fetchFundingBalance, recipientPubkey, rpcUrl]);
 
   const disconnect = useCallback(() => {
     clientRef.current = null;
@@ -224,6 +276,8 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
         const client = clientRef.current;
         const testAmount = toHex(ckbToShannon(amount));
 
+        await ensureRecipientPeerConnected(recipientPubkey);
+
         // First check for direct ready channel to this recipient.
         // This avoids false negatives when dry-run behavior differs by runtime/proxy mode.
         const recipientPeerId = await client.findPeerIdByPubkey(recipientPubkey);
@@ -264,7 +318,7 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
         return false;
       }
     },
-    [clearChannelTimer]
+    [clearChannelTimer, ensureRecipientPeerConnected]
   );
 
   const cancelChannelSetup = useCallback(() => {
@@ -309,6 +363,19 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
       try {
         const client = clientRef.current;
         const fundingAmount = toHex(ckbToShannon(fundingAmountCkb));
+
+        const isRecipientConnected = await ensureRecipientPeerConnected(recipientPubkey);
+        if (!isRecipientConnected) {
+          if (!recipientMultiaddr) {
+            throw new Error(
+              'Recipient peer is not connected and NEXT_PUBLIC_RECIPIENT_MULTIADDR is not configured.'
+            );
+          }
+
+          throw new Error(
+            'Failed to connect recipient peer through NEXT_PUBLIC_RECIPIENT_MULTIADDR. Ensure the recipient node is online and the multiaddr is correct.'
+          );
+        }
 
         const channelsBefore = await client.listChannels();
         const existingChannelIds = new Set(channelsBefore.channels.map((channel) => channel.channel_id));
@@ -408,7 +475,13 @@ export function useFiberNode(rpcUrl: string): UseFiberNodeResult {
         return false;
       }
     },
-    [clearChannelTimer, fundingBalanceCkb, startChannelTimer]
+    [
+      clearChannelTimer,
+      ensureRecipientPeerConnected,
+      fundingBalanceCkb,
+      recipientMultiaddr,
+      startChannelTimer,
+    ]
   );
 
   const isFundingSufficient =

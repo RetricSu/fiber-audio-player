@@ -26,21 +26,31 @@ const DEMO_EPISODE = {
 // Default configuration
 const DEFAULT_RPC_URL = 'http://127.0.0.1:8229';
 const FAUCET_URL = 'https://testnet.ckbapp.dev/';
+const DEFAULT_PAYMENT_INTERVAL_MS = 10000;
 
 // Recipient pubkey is fixed at deploy time by the podcast owner
 const RECIPIENT_PUBKEY = process.env.NEXT_PUBLIC_RECIPIENT_PUBKEY || '';
+const RECIPIENT_MULTIADDR = process.env.NEXT_PUBLIC_RECIPIENT_MULTIADDR || '';
+const parsedPaymentInterval = Number(process.env.NEXT_PUBLIC_PAYMENT_INTERVAL_MS || DEFAULT_PAYMENT_INTERVAL_MS);
+const PAYMENT_INTERVAL_MS =
+  Number.isFinite(parsedPaymentInterval) && parsedPaymentInterval > 0
+    ? parsedPaymentInterval
+    : DEFAULT_PAYMENT_INTERVAL_MS;
 
 export default function Home() {
   const [rpcUrl, setRpcUrl] = useState(DEFAULT_RPC_URL);
 
-  const fiberNode = useFiberNode(rpcUrl);
+  const fiberNode = useFiberNode(rpcUrl, {
+    recipientPubkey: RECIPIENT_PUBKEY,
+    recipientMultiaddr: RECIPIENT_MULTIADDR,
+  });
 
   // For payment history, we need to track payments
   const payment = useStreamingPayment({
     rpcUrl,
     recipientPubkey: RECIPIENT_PUBKEY,
     ratePerSecond: DEMO_EPISODE.pricePerSecond,
-    paymentIntervalMs: 1000,
+    paymentIntervalMs: PAYMENT_INTERVAL_MS,
   });
 
   return (
@@ -141,6 +151,7 @@ export default function Home() {
                 fundingBalanceError={fiberNode.fundingBalanceError}
                 faucetUrl={FAUCET_URL}
                 recipientPubkey={RECIPIENT_PUBKEY}
+                recipientMultiaddrConfigured={Boolean(RECIPIENT_MULTIADDR.trim())}
                 onCheckRoute={() => fiberNode.checkPaymentRoute(RECIPIENT_PUBKEY)}
                 onOpenChannel={() => fiberNode.setupChannel(RECIPIENT_PUBKEY)}
                 onCancelSetup={fiberNode.cancelChannelSetup}

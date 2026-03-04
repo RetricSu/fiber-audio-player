@@ -18,7 +18,7 @@ export default function RootLayout({
         <div className="noise-overlay" />
 
         {/* Grid pattern */}
-        <div className="fixed inset-0 grid-pattern opacity-20 pointer-events-none" />
+        <div className="fixed inset-0 grid-pattern opacity-10 pointer-events-none" />
 
         {/* Main content */}
         <main className="relative z-10 min-h-screen">

@@ -12,7 +12,7 @@ export function PaymentHistory({ payments }: PaymentHistoryProps) {
   const recentPayments = payments.slice(-10).reverse();
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-fiber-surface/50 backdrop-blur-sm border border-fiber-border">
+    <div className="relative overflow-hidden rounded-2xl bg-fiber-surface/70 backdrop-blur-sm border border-fiber-border">
       {/* Header */}
       <div className="px-5 py-4 border-b border-fiber-border/50">
         <div className="flex items-center justify-between">
@@ -66,7 +66,7 @@ export function PaymentHistory({ payments }: PaymentHistoryProps) {
 
                     {/* Payment hash preview */}
                     {payment.paymentHash && (
-                      <span className="text-[10px] font-mono text-fiber-muted/60 hidden sm:block">
+                      <span className="text-xs font-mono text-fiber-muted/80 hidden sm:block">
                         {payment.paymentHash.slice(0, 10)}...
                       </span>
                     )}
@@ -87,7 +87,7 @@ export function PaymentHistory({ payments }: PaymentHistoryProps) {
                     >
                       -{formatShannon(payment.amountShannon, 6)}
                     </motion.span>
-                    <span className="text-[10px] text-fiber-muted">CKB</span>
+                    <span className="text-xs text-fiber-muted">CKB</span>
                   </div>
                 </motion.div>
               ))}
