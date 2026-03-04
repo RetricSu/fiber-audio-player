@@ -155,14 +155,9 @@ export function ConnectionErrorModal({ isOpen, onClose, error, rpcUrl }: Connect
                         {error}
                       </p>
                     )}
-                  </div>
-
-                  {/* RPC URL */}
-                  <div className="space-y-2">
-                    <p className="text-xs font-mono uppercase tracking-wider text-fiber-muted">RPC URL</p>
-                    <div className="flex items-center gap-2 p-3 rounded-lg bg-fiber-dark/50 border border-fiber-border">
-                      <code className="text-sm font-mono text-white/80 flex-1 truncate">{rpcUrl}</code>
-                    </div>
+                    <p className='mt-2 text-xs font-mono text-white/60 bg-black/20 p-2 rounded'>
+                      Make sure your Fiber node is running with COR-enabled at: <code className="text-fiber-accent">{rpcUrl}</code>
+                    </p>
                   </div>
 
                   {/* Setup Instructions */}
@@ -196,13 +191,11 @@ export function ConnectionErrorModal({ isOpen, onClose, error, rpcUrl }: Connect
                         </div>
                       </div>
 
-                      <div className="pt-2 border-t border-fiber-border/30">
+                      <div className="space-y-2">
                         <p className="text-xs text-fiber-muted">
-                          Use this RPC endpoint in the player:{' '}
-                          <code className="text-fiber-accent">http://127.0.0.1:8229</code>
-                        </p>
-                        <p className="text-[10px] text-fiber-muted/60 mt-1">
-                          (via fiber-pay runtime proxy for CORS support)
+                          3. Use this RPC endpoint in the player:{' '}
+                          <code>http://127.0.0.1:8229</code>
+                          {' '}via fiber-pay runtime proxy for CORS support
                         </p>
                       </div>
                     </div>
