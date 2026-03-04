@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@fiber-pay/sdk':
-        specifier: 0.1.0-rc.4
-        version: 0.1.0-rc.4
+        specifier: 0.1.0-rc.5
+        version: 0.1.0-rc.5
       motion:
         specifier: ^12.4.7
         version: 12.33.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -105,8 +105,8 @@ packages:
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@fiber-pay/sdk@0.1.0-rc.4':
-    resolution: {integrity: sha512-tE8Rz1csROZRO0G3uMKdLhjJOEfi6ohTV2KXlAc3WDVR9fKDhd2BqVIAPlxwbEqJlOa3z/EMo9zkLtWjOr4bcw==}
+  '@fiber-pay/sdk@0.1.0-rc.5':
+    resolution: {integrity: sha512-r9/S1xscG4vMMH+/K7l2yP8XbzlFQp2h2DuxYBXK8QKDrKYGX2EdZfwBJ6pA3Xjbx11WybNTX75ScWP4XrAc3A==}
     engines: {node: '>=20'}
 
   '@humanfs/core@0.19.1':
@@ -1920,7 +1920,7 @@ snapshots:
       '@eslint/core': 0.17.0
       levn: 0.4.1
 
-  '@fiber-pay/sdk@0.1.0-rc.4':
+  '@fiber-pay/sdk@0.1.0-rc.5':
     dependencies:
       '@noble/hashes': 2.0.1
       zod: 4.3.6
