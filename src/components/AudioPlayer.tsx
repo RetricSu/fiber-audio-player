@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAudioPlayer } from '@/hooks/use-audio-player';
 import { UseStreamingPaymentResult } from '@/hooks/use-streaming-payment';
-import { authorizeStream, toAbsolutePlaylistUrl, verifyPayment } from '@/lib/stream-auth';
+import { toAbsolutePlaylistUrl } from '@/lib/stream-auth';
 import { WaveformVisualizer } from './WaveformVisualizer';
 import { PaymentFlowVisualizer } from './PaymentFlowVisualizer';
 
@@ -39,9 +39,9 @@ export function AudioPlayer({
   isRouteReady,
   payment,
 }: AudioPlayerProps) {
-  const requestedSeconds = Math.max(
+  const chunkSeconds = Math.max(
     1,
-    Number(process.env.NEXT_PUBLIC_STREAM_REQUESTED_SECONDS ?? 30)
+    Number(process.env.NEXT_PUBLIC_STREAM_CHUNK_SECONDS ?? 30)
   );
   const [volume, setVolumeState] = useState(0.8);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
@@ -98,25 +98,17 @@ export function AudioPlayer({
 
       setPlaybackGuardError(null);
 
-      const started = await payment.start();
-      if (!started) {
-        setPlaybackGuardError(payment.error || 'Unable to start payment stream.');
-        return;
-      }
-
       try {
-        const verify = await verifyPayment({
-          requestedSeconds,
-        });
+        // Start streaming: creates session → invoice → pay → claim → returns grant
+        const grant = await payment.start(chunkSeconds);
+        if (!grant) {
+          setPlaybackGuardError(payment.error || 'Unable to start payment stream.');
+          return;
+        }
 
-        const authorized = await authorizeStream({
-          paymentSessionId: verify.payment.paymentSessionId,
-          requestedSeconds,
-        });
-
-        const playlistUrl = toAbsolutePlaylistUrl(authorized.stream.playlistUrl);
+        // Set HLS playlist URL from the grant
         shouldAutoPlayAfterAuthorizeRef.current = true;
-        setPlaybackSrc(playlistUrl);
+        setPlaybackSrc(grant.playlistUrl);
       } catch (error) {
         await payment.stop();
         setPlaybackGuardError(
@@ -124,7 +116,7 @@ export function AudioPlayer({
         );
       }
     }
-  }, [audio, isFiberConnected, isRouteReady, payment, requestedSeconds]);
+  }, [audio, isFiberConnected, isRouteReady, payment, chunkSeconds]);
 
   const handleSeek = useCallback(
     (progress: number) => {

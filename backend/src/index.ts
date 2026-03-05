@@ -3,15 +3,48 @@ import { serve } from '@hono/node-server'
 import { cors } from 'hono/cors'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { randomUUID, createHash } from 'node:crypto'
+import {
+  FiberRpcClient,
+  randomBytes32,
+  toHex,
+  type Currency,
+} from '@fiber-pay/sdk'
 
 const app = new Hono()
 
 app.use('*', cors())
 
-type PaymentSession = {
+// ---------------------------------------------------------------------------
+// Fiber RPC client — connected to the developer / content-owner Fiber node
+// ---------------------------------------------------------------------------
+const FIBER_RPC_URL = process.env.FIBER_RPC_URL || 'http://127.0.0.1:8227'
+const PRICE_PER_SECOND_SHANNON = BigInt(process.env.PRICE_PER_SECOND_SHANNON ?? '10000') // 0.0001 CKB
+const INVOICE_CURRENCY = (process.env.INVOICE_CURRENCY ?? 'Fibd') as Currency
+const INVOICE_EXPIRY_SEC = Number(process.env.INVOICE_EXPIRY_SEC ?? 600)
+
+const fiberClient = new FiberRpcClient({ url: FIBER_RPC_URL, timeout: 15_000 })
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+type HoldInvoice = {
+  paymentHash: string
+  preimage: string
+  invoiceAddress: string
+  amountShannon: bigint
+  grantedSeconds: number
+  sessionId: string
+  createdAt: number
+  settled: boolean
+}
+
+type StreamSession = {
   id: string
-  approvedSeconds: number
+  streamToken: string
+  totalPaidSeconds: number
+  maxSegmentIndex: number
+  expiresAt: number
   createdAt: number
 }
 
@@ -19,10 +52,11 @@ type StreamGrant = {
   token: string
   expiresAt: number
   maxSegmentIndex: number
-  paymentSessionId: string
+  sessionId: string
 }
 
-const paymentSessions = new Map<string, PaymentSession>()
+const holdInvoices = new Map<string, HoldInvoice>()
+const sessions = new Map<string, StreamSession>()
 const streamGrants = new Map<string, StreamGrant>()
 
 const segmentDurationSec = Number(process.env.HLS_SEGMENT_DURATION_SEC ?? 6)
@@ -72,74 +106,200 @@ function rewritePlaylistWithToken(content: string, token: string): string {
 
 app.get('/healthz', (c) => c.json({ ok: true, service: 'fiber-audio-backend' }))
 
-app.post('/payments/verify', async (c) => {
-  const body = await c.req.json().catch(() => ({})) as {
-    requestedSeconds?: number
-    paymentHash?: string
+// ---------------------------------------------------------------------------
+// GET /node-info — expose the backend Fiber node's pubkey so the frontend knows
+// who to route payments to.
+// ---------------------------------------------------------------------------
+app.get('/node-info', async (c) => {
+  try {
+    const info = await fiberClient.nodeInfo()
+    return c.json({
+      ok: true,
+      node: {
+        nodeName: info.node_name,
+        nodeId: info.node_id,
+        addresses: info.addresses,
+        openChannelAutoAcceptMin: info.open_channel_auto_accept_min_ckb_funding_amount,
+      },
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to reach Fiber node'
+    return c.json({ ok: false, error: message }, 502)
   }
+})
 
-  const requestedSeconds = Math.max(1, Number(body.requestedSeconds ?? 30))
+// ---------------------------------------------------------------------------
+// POST /sessions/create — start a new streaming session.
+// Returns a sessionId and the initial (empty) stream token.
+// ---------------------------------------------------------------------------
+app.post('/sessions/create', async (c) => {
+  const sessionId = randomUUID()
+  const streamToken = randomUUID()
+  const expiresAt = Date.now() + authTtlSec * 1000
 
-  const session: PaymentSession = {
-    id: randomUUID(),
-    approvedSeconds: requestedSeconds,
+  const session: StreamSession = {
+    id: sessionId,
+    streamToken,
+    totalPaidSeconds: 0,
+    maxSegmentIndex: -1, // no segments unlocked yet
+    expiresAt,
     createdAt: Date.now(),
   }
+  sessions.set(sessionId, session)
 
-  paymentSessions.set(session.id, session)
+  // Also create the grant entry so the token can be validated (but 0 segments)
+  streamGrants.set(streamToken, {
+    token: streamToken,
+    expiresAt,
+    maxSegmentIndex: -1,
+    sessionId,
+  })
 
   return c.json({
     ok: true,
-    verifyMode: 'dummy-agree',
-    payment: {
-      paymentSessionId: session.id,
-      paymentHash: body.paymentHash ?? null,
-      approvedSeconds: session.approvedSeconds,
-    },
-    next: {
-      authorizeEndpoint: '/stream/authorize',
+    session: {
+      sessionId,
+      pricePerSecondShannon: toHex(PRICE_PER_SECOND_SHANNON),
+      segmentDurationSec,
     },
   })
 })
 
-app.post('/stream/authorize', async (c) => {
-  const body = await c.req.json().catch(() => ({})) as {
-    paymentSessionId?: string
-    requestedSeconds?: number
+// ---------------------------------------------------------------------------
+// POST /invoices/create — create a hold invoice for N seconds of streaming.
+// Body: { sessionId: string, seconds: number }
+// Returns: { invoiceAddress, paymentHash, amountShannon, seconds }
+// ---------------------------------------------------------------------------
+app.post('/invoices/create', async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as {
+    sessionId?: string
+    seconds?: number
   }
 
-  const paymentSessionId = body.paymentSessionId ?? ''
-  const session = paymentSessions.get(paymentSessionId)
-
+  const sessionId = body.sessionId ?? ''
+  const session = sessions.get(sessionId)
   if (!session) {
-    return c.json({ ok: false, error: 'Invalid paymentSessionId' }, 400)
+    return c.json({ ok: false, error: 'Invalid sessionId' }, 400)
   }
 
-  const requestedSeconds = Math.max(1, Number(body.requestedSeconds ?? session.approvedSeconds))
-  const grantedSeconds = Math.min(requestedSeconds, session.approvedSeconds)
-  const maxSegmentIndex = toSegmentIndex(grantedSeconds)
+  const seconds = Math.max(1, Math.floor(Number(body.seconds ?? 30)))
+  const amountShannon = PRICE_PER_SECOND_SHANNON * BigInt(seconds)
 
-  const token = randomUUID()
-  const expiresAt = Date.now() + authTtlSec * 1000
+  // Generate preimage and derive payment_hash (SHA-256)
+  const preimage = randomBytes32() as string
+  const preimageBytes = Buffer.from(preimage.replace(/^0x/, ''), 'hex')
+  const hashBytes = createHash('sha256').update(preimageBytes).digest()
+  const paymentHash = `0x${hashBytes.toString('hex')}`
 
-  streamGrants.set(token, {
-    token,
-    expiresAt,
-    maxSegmentIndex,
-    paymentSessionId,
-  })
+  try {
+    const result = await fiberClient.newInvoice({
+      amount: toHex(amountShannon) as `0x${string}`,
+      currency: INVOICE_CURRENCY,
+      payment_hash: paymentHash as `0x${string}`,
+      description: `Audio stream: ${seconds}s`,
+      expiry: toHex(BigInt(INVOICE_EXPIRY_SEC)) as `0x${string}`,
+    })
 
-  return c.json({
-    ok: true,
-    stream: {
-      token,
-      expiresAt,
-      grantedSeconds,
-      segmentDurationSec,
-      maxSegmentIndex,
-      playlistUrl: `/stream/hls/playlist.m3u8?token=${token}`,
-    },
-  })
+    holdInvoices.set(paymentHash, {
+      paymentHash,
+      preimage,
+      invoiceAddress: result.invoice_address,
+      amountShannon,
+      grantedSeconds: seconds,
+      sessionId,
+      createdAt: Date.now(),
+      settled: false,
+    })
+
+    return c.json({
+      ok: true,
+      invoice: {
+        invoiceAddress: result.invoice_address,
+        paymentHash,
+        amountShannon: toHex(amountShannon),
+        seconds,
+      },
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to create invoice'
+    return c.json({ ok: false, error: message }, 500)
+  }
+})
+
+// ---------------------------------------------------------------------------
+// POST /invoices/claim — verify payment received, settle invoice, unlock segments.
+// Body: { paymentHash: string }
+// The endpoint polls the Fiber node for up to 60 seconds waiting for "Received".
+// Returns the stream token and updated grant info.
+// ---------------------------------------------------------------------------
+app.post('/invoices/claim', async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as {
+    paymentHash?: string
+  }
+
+  const paymentHash = body.paymentHash ?? ''
+  const hold = holdInvoices.get(paymentHash)
+  if (!hold) {
+    return c.json({ ok: false, error: 'Unknown payment hash' }, 400)
+  }
+  if (hold.settled) {
+    return c.json({ ok: false, error: 'Invoice already settled' }, 400)
+  }
+
+  const session = sessions.get(hold.sessionId)
+  if (!session) {
+    return c.json({ ok: false, error: 'Session expired' }, 400)
+  }
+
+  try {
+    // Wait for the invoice to reach "Received" status (payment arrived but not settled)
+    const invoiceResult = await fiberClient.waitForInvoiceStatus(
+      paymentHash as `0x${string}`,
+      'Received',
+      { timeout: 60_000, interval: 1_000 },
+    )
+
+    if (invoiceResult.status !== 'Received') {
+      return c.json({
+        ok: false,
+        error: `Unexpected invoice status: ${invoiceResult.status}`,
+      }, 402)
+    }
+
+    // Settle the hold invoice — release the preimage to the payer
+    await fiberClient.settleInvoice({
+      payment_hash: paymentHash as `0x${string}`,
+      payment_preimage: hold.preimage as `0x${string}`,
+    })
+    hold.settled = true
+
+    // Extend the session grant
+    session.totalPaidSeconds += hold.grantedSeconds
+    session.maxSegmentIndex = toSegmentIndex(session.totalPaidSeconds)
+    session.expiresAt = Date.now() + authTtlSec * 1000
+
+    // Update the stream grant for this token
+    const grant = streamGrants.get(session.streamToken)
+    if (grant) {
+      grant.maxSegmentIndex = session.maxSegmentIndex
+      grant.expiresAt = session.expiresAt
+    }
+
+    return c.json({
+      ok: true,
+      stream: {
+        token: session.streamToken,
+        expiresAt: session.expiresAt,
+        grantedSeconds: session.totalPaidSeconds,
+        segmentDurationSec,
+        maxSegmentIndex: session.maxSegmentIndex,
+        playlistUrl: `/stream/hls/playlist.m3u8?token=${session.streamToken}`,
+      },
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Payment verification failed'
+    return c.json({ ok: false, error: message }, 402)
+  }
 })
 
 app.get('/stream/hls/:fileName', async (c) => {

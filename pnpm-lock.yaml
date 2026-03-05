@@ -57,6 +57,9 @@ importers:
 
   backend:
     dependencies:
+      '@fiber-pay/sdk':
+        specifier: 0.1.0-rc.5
+        version: 0.1.0-rc.5
       '@hono/node-server':
         specifier: ^1.19.4
         version: 1.19.10(hono@4.12.4)

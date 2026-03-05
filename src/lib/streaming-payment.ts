@@ -1,17 +1,19 @@
 // Streaming payment service for audio playback
-// Implements pay-per-second model using Fiber Network
+// Invoice-based pay-per-chunk model using Fiber Network hold invoices
 
-import { FiberRpcClient, toHex, formatShannon, ckbToShannon } from './fiber-rpc';
-
-const MIN_ROUTE_CHECK_CKB = 0.0001;
-const MIN_PAYMENT_SHANNON = 1n;
+import { FiberRpcClient, toHex, fromHex, formatShannon, ckbToShannon } from './fiber-rpc';
+import {
+  createSession,
+  createInvoice,
+  claimInvoice,
+  toAbsolutePlaylistUrl,
+  type ClaimInvoiceResponse,
+} from './stream-auth';
 
 export interface StreamingPaymentConfig {
   rpcUrl: string;
   recipientPubkey: string;
-  ratePerSecond: number; // in CKB
-  paymentIntervalMs?: number; // how often to send payments
-  currency?: 'Fibb' | 'Fibt' | 'Fibd';
+  ratePerSecond: number; // in CKB (display only — actual pricing comes from backend)
 }
 
 export interface PaymentTick {
@@ -25,23 +27,30 @@ export interface PaymentTick {
 
 export type PaymentCallback = (tick: PaymentTick) => void;
 
+export interface StreamGrant {
+  token: string;
+  playlistUrl: string;
+  grantedSeconds: number;
+  maxSegmentIndex: number;
+  expiresAt: number;
+}
+
+export type StreamGrantCallback = (grant: StreamGrant) => void;
+
 export class StreamingPaymentService {
   private client: FiberRpcClient;
-  private config: Required<StreamingPaymentConfig>;
+  private config: StreamingPaymentConfig;
   private isStreaming = false;
-  private intervalId: ReturnType<typeof setInterval> | null = null;
   private totalPaid = 0n;
   private callbacks: Set<PaymentCallback> = new Set();
-  private lastPaymentTime = 0;
-  private accumulatedSeconds = 0;
-  private pendingAmountShannon = 0n;
+  private grantCallbacks: Set<StreamGrantCallback> = new Set();
+
+  // Session state
+  private sessionId: string | null = null;
+  private currentGrant: StreamGrant | null = null;
 
   constructor(config: StreamingPaymentConfig) {
-    this.config = {
-      ...config,
-      paymentIntervalMs: config.paymentIntervalMs || 10000, // Default: pay every 10 seconds
-      currency: config.currency || 'Fibd',
-    };
+    this.config = config;
     this.client = new FiberRpcClient({ url: config.rpcUrl });
   }
 
@@ -50,102 +59,129 @@ export class StreamingPaymentService {
     return () => this.callbacks.delete(callback);
   }
 
-  private notifyCallbacks(tick: PaymentTick) {
+  onGrantUpdate(callback: StreamGrantCallback): () => void {
+    this.grantCallbacks.add(callback);
+    return () => this.grantCallbacks.delete(callback);
+  }
+
+  private notifyPayment(tick: PaymentTick) {
     this.callbacks.forEach((cb) => cb(tick));
   }
 
-  async startStreaming(): Promise<void> {
-    if (this.isStreaming) return;
+  private notifyGrant(grant: StreamGrant) {
+    this.grantCallbacks.forEach((cb) => cb(grant));
+  }
+
+  /**
+   * Start a streaming session. Creates a backend session, then performs the
+   * first invoice-pay-claim cycle to unlock the initial batch of segments.
+   *
+   * @param seconds  Number of seconds to purchase in the first batch
+   * @returns The initial stream grant (playlist URL, token, etc.)
+   */
+  async startStreaming(seconds: number = 30): Promise<StreamGrant> {
+    if (this.isStreaming && this.currentGrant) {
+      return this.currentGrant;
+    }
 
     if (!this.config.recipientPubkey?.trim()) {
       throw new Error('Recipient public key is required to start streaming payments.');
     }
 
-    // Check if we have a valid payment route before starting
-    const routeProbeAmount = Math.max(this.config.ratePerSecond, MIN_ROUTE_CHECK_CKB);
-    const canPay = await this.checkPaymentRoute(routeProbeAmount);
-    if (!canPay) {
-      throw new Error(
-        'No payment route available to recipient. Please ensure you have an open channel ' +
-        'with sufficient balance, either directly or through the Fiber network.'
-      );
-    }
+    // 1. Create a backend session
+    const sessionRes = await createSession();
+    this.sessionId = sessionRes.session.sessionId;
 
     this.isStreaming = true;
-    this.lastPaymentTime = Date.now();
-    this.accumulatedSeconds = 0;
-    this.pendingAmountShannon = 0n;
 
-    this.intervalId = setInterval(() => {
-      this.processPaymentTick();
-    }, this.config.paymentIntervalMs);
+    // 2. Pay for the first batch
+    const grant = await this.payForSeconds(seconds);
+    return grant;
   }
 
-  async stopStreaming(): Promise<void> {
-    if (!this.isStreaming) return;
-    this.isStreaming = false;
-
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
+  /**
+   * Pay for additional seconds of streaming. Creates a hold invoice on the
+   * backend, pays it via the user's Fiber node, then claims the stream grant.
+   */
+  async payForSeconds(seconds: number): Promise<StreamGrant> {
+    if (!this.sessionId) {
+      throw new Error('No active session. Call startStreaming() first.');
     }
 
-    // Process final payment for remaining time
-    await this.processPaymentTick();
-    this.accumulatedSeconds = 0;
-  }
+    // 1. Request hold invoice from backend
+    const invoiceRes = await createInvoice({
+      sessionId: this.sessionId,
+      seconds,
+    });
 
-  private async processPaymentTick(): Promise<void> {
-    const now = Date.now();
-    const elapsedSeconds = (now - this.lastPaymentTime) / 1000;
-    this.lastPaymentTime = now;
-    this.accumulatedSeconds += elapsedSeconds;
-
-    // Only pay for full seconds accumulated
-    const secondsToPay = Math.floor(this.accumulatedSeconds);
-    if (secondsToPay <= 0) return;
-
-    this.accumulatedSeconds -= secondsToPay;
-    const intervalAmountShannon = ckbToShannon(this.config.ratePerSecond * secondsToPay);
-    this.pendingAmountShannon += intervalAmountShannon;
-
-    // Keep accumulating until we have at least 1 shannon to send.
-    if (this.pendingAmountShannon < MIN_PAYMENT_SHANNON) {
-      return;
-    }
-
-    const amountToSendShannon = this.pendingAmountShannon;
+    const { invoiceAddress, paymentHash, amountShannon: amountHex } = invoiceRes.invoice;
+    const amountShannon = fromHex(amountHex as `0x${string}`);
 
     const tick: PaymentTick = {
-      timestamp: now,
-      amountShannon: intervalAmountShannon,
+      timestamp: Date.now(),
+      amountShannon,
       totalPaidShannon: this.totalPaid,
+      paymentHash,
       status: 'pending',
     };
+    this.notifyPayment(tick);
 
     try {
-      const result = await this.client.keysend(
-        this.config.recipientPubkey,
-        toHex(amountToSendShannon)
-      );
+      // 2. Send payment via user's Fiber node
+      // sendPayment will return quickly; actual settlement happens when backend settles the invoice
+      const payResult = await this.client.sendPayment({
+        invoice: invoiceAddress as `0x${string}`,
+      });
 
-      tick.paymentHash = result.payment_hash;
-      tick.status = result.status === 'Success' ? 'success' : 'failed';
-      if (result.failed_error) {
-        tick.error = result.failed_error;
+      // Do not wait for the payment to fully resolve here — the backend's
+      // /invoices/claim will wait for "Received" and then settle, which will
+      // cause this payment to complete on-chain. We call claim in parallel.
+
+      // 3. Claim the grant from backend (backend waits for Received → settles)
+      let claimRes: ClaimInvoiceResponse;
+      try {
+        claimRes = await claimInvoice({ paymentHash });
+      } catch (claimErr) {
+        // If claim fails, the payment might still be in-flight. We don't
+        // try to cancel — the invoice will expire server-side.
+        throw new Error(
+          `Invoice claim failed: ${claimErr instanceof Error ? claimErr.message : 'Unknown error'}`
+        );
       }
 
-      if (tick.status === 'success') {
-        this.totalPaid += amountToSendShannon;
-        this.pendingAmountShannon = 0n;
-        tick.totalPaidShannon = this.totalPaid;
-      }
+      const grant: StreamGrant = {
+        token: claimRes.stream.token,
+        playlistUrl: toAbsolutePlaylistUrl(claimRes.stream.playlistUrl),
+        grantedSeconds: claimRes.stream.grantedSeconds,
+        maxSegmentIndex: claimRes.stream.maxSegmentIndex,
+        expiresAt: claimRes.stream.expiresAt,
+      };
+
+      this.currentGrant = grant;
+      this.totalPaid += amountShannon;
+
+      tick.status = 'success';
+      tick.totalPaidShannon = this.totalPaid;
+      this.notifyPayment(tick);
+      this.notifyGrant(grant);
+
+      return grant;
     } catch (error) {
       tick.status = 'failed';
       tick.error = error instanceof Error ? error.message : 'Unknown error';
+      tick.totalPaidShannon = this.totalPaid;
+      this.notifyPayment(tick);
+      throw error;
     }
+  }
 
-    this.notifyCallbacks(tick);
+  async stopStreaming(): Promise<void> {
+    this.isStreaming = false;
+    // Session stays valid so user can resume without re-paying
+  }
+
+  getCurrentGrant(): StreamGrant | null {
+    return this.currentGrant;
   }
 
   getTotalPaid(): bigint {
@@ -160,8 +196,7 @@ export class StreamingPaymentService {
     return this.isStreaming;
   }
 
-  // Dry run to check if payment would succeed
-  async checkPaymentRoute(amount: number): Promise<boolean> {
-    return this.client.checkPaymentRoute(this.config.recipientPubkey, toHex(ckbToShannon(amount)));
+  getSessionId(): string | null {
+    return this.sessionId;
   }
 }
