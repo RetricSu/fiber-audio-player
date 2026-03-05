@@ -52,6 +52,31 @@ export function AudioPlayer({
 
   const audio = useAudioPlayer(playbackSrc);
 
+  // Auto-extend: when playback approaches the paid segment boundary, pay for more
+  const isExtendingRef = useRef(false);
+  useEffect(() => {
+    if (
+      !audio.isPlaying ||
+      !payment.isStreaming ||
+      !payment.currentGrant ||
+      isExtendingRef.current
+    ) {
+      return;
+    }
+
+    const segmentDuration = 6; // matches HLS_SEGMENT_DURATION_SEC
+    const paidUpTo = payment.currentGrant.grantedSeconds;
+    // Start extending when we're within 2 segments of the boundary
+    const threshold = paidUpTo - segmentDuration * 2;
+
+    if (audio.currentTime >= threshold && threshold > 0) {
+      isExtendingRef.current = true;
+      payment.extend(chunkSeconds)
+        .catch(() => { /* error is surfaced via payment.error */ })
+        .finally(() => { isExtendingRef.current = false; });
+    }
+  }, [audio.currentTime, audio.isPlaying, payment, chunkSeconds]);
+
   // Ensure payment stream is stopped when playback actually transitions from playing to stopped.
   // This avoids stopping during startup while waiting for the audio play event.
   useEffect(() => {

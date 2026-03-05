@@ -44,6 +44,7 @@ export class StreamingPaymentService {
   private totalPaid = 0n;
   private callbacks: Set<PaymentCallback> = new Set();
   private grantCallbacks: Set<StreamGrantCallback> = new Set();
+  private paymentInFlight = false;
 
   // Session state
   private sessionId: string | null = null;
@@ -108,6 +109,11 @@ export class StreamingPaymentService {
       throw new Error('No active session. Call startStreaming() first.');
     }
 
+    if (this.paymentInFlight) {
+      throw new Error('A payment is already in progress.');
+    }
+    this.paymentInFlight = true;
+
     // 1. Request hold invoice from backend
     const invoiceRes = await createInvoice({
       sessionId: this.sessionId,
@@ -127,27 +133,16 @@ export class StreamingPaymentService {
     this.notifyPayment(tick);
 
     try {
-      // 2. Send payment via user's Fiber node
-      // sendPayment will return quickly; actual settlement happens when backend settles the invoice
-      const payResult = await this.client.sendPayment({
-        invoice: invoiceAddress as `0x${string}`,
-      });
-
-      // Do not wait for the payment to fully resolve here — the backend's
-      // /invoices/claim will wait for "Received" and then settle, which will
-      // cause this payment to complete on-chain. We call claim in parallel.
-
-      // 3. Claim the grant from backend (backend waits for Received → settles)
-      let claimRes: ClaimInvoiceResponse;
-      try {
-        claimRes = await claimInvoice({ paymentHash });
-      } catch (claimErr) {
-        // If claim fails, the payment might still be in-flight. We don't
-        // try to cancel — the invoice will expire server-side.
-        throw new Error(
-          `Invoice claim failed: ${claimErr instanceof Error ? claimErr.message : 'Unknown error'}`
-        );
-      }
+      // 2. Send payment and claim grant concurrently.
+      // sendPayment blocks until the payee settles (releases preimage),
+      // and the backend only settles inside /invoices/claim — so these
+      // MUST run in parallel to avoid a deadlock.
+      const [_payResult, claimRes] = await Promise.all([
+        this.client.sendPayment({
+          invoice: invoiceAddress as `0x${string}`,
+        }),
+        claimInvoice({ paymentHash }),
+      ]);
 
       const grant: StreamGrant = {
         token: claimRes.stream.token,
@@ -172,6 +167,8 @@ export class StreamingPaymentService {
       tick.totalPaidShannon = this.totalPaid;
       this.notifyPayment(tick);
       throw error;
+    } finally {
+      this.paymentInFlight = false;
     }
   }
 
@@ -194,6 +191,10 @@ export class StreamingPaymentService {
 
   isActive(): boolean {
     return this.isStreaming;
+  }
+
+  isPaymentInFlight(): boolean {
+    return this.paymentInFlight;
   }
 
   getSessionId(): string | null {

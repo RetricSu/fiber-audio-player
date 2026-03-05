@@ -25,7 +25,7 @@ const DEMO_EPISODE = {
 };
 
 // Default configuration
-const DEFAULT_RPC_URL = 'http://127.0.0.1:8229';
+const DEFAULT_RPC_URL = 'http://127.0.0.1:28229';
 const FAUCET_URL = 'https://testnet.ckbapp.dev/';
 
 // Bootnode multiaddr — for the user's node to join the Fiber network.
@@ -174,7 +174,7 @@ export default function Home() {
                         value={rpcUrl}
                         onChange={(e) => setRpcUrl(e.target.value)}
                         className="w-full px-3 py-2 bg-fiber-dark border border-fiber-border rounded-lg text-sm font-mono text-white focus:outline-none focus:border-fiber-accent/50 transition-colors"
-                        placeholder="http://127.0.0.1:8229"
+                        placeholder="http://127.0.0.1:28229"
                       />
                     </div>
                   ) : null

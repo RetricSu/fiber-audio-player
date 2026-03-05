@@ -1,9 +1,11 @@
+import 'dotenv/config'
 import { Hono } from 'hono'
 import { serve } from '@hono/node-server'
 import { cors } from 'hono/cors'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { randomUUID, createHash } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
+import { blake2b } from '@noble/hashes/blake2.js'
 import {
   FiberRpcClient,
   randomBytes32,
@@ -58,6 +60,14 @@ type StreamGrant = {
 const holdInvoices = new Map<string, HoldInvoice>()
 const sessions = new Map<string, StreamSession>()
 const streamGrants = new Map<string, StreamGrant>()
+
+// CKB blake2b-256 with personalization "ckb-default-hash"
+const CKB_HASH_PERSONALIZATION = Uint8Array.from(
+  Buffer.from('ckb-default-hash'),
+)
+function ckbHash(data: Uint8Array): Uint8Array {
+  return blake2b(data, { dkLen: 32, personalization: CKB_HASH_PERSONALIZATION })
+}
 
 const segmentDurationSec = Number(process.env.HLS_SEGMENT_DURATION_SEC ?? 6)
 const authTtlSec = Number(process.env.STREAM_AUTH_TTL_SEC ?? 300)
@@ -185,11 +195,15 @@ app.post('/invoices/create', async (c) => {
   const seconds = Math.max(1, Math.floor(Number(body.seconds ?? 30)))
   const amountShannon = PRICE_PER_SECOND_SHANNON * BigInt(seconds)
 
-  // Generate preimage and derive payment_hash (SHA-256)
+  // Generate preimage and derive payment_hash using CkbHash (blake2b-256)
   const preimage = randomBytes32() as string
-  const preimageBytes = Buffer.from(preimage.replace(/^0x/, ''), 'hex')
-  const hashBytes = createHash('sha256').update(preimageBytes).digest()
-  const paymentHash = `0x${hashBytes.toString('hex')}`
+  const preimageBytes = Uint8Array.from(
+    Buffer.from(preimage.replace(/^0x/, ''), 'hex'),
+  )
+  const hashBytes = ckbHash(preimageBytes)
+  const paymentHash = `0x${Buffer.from(hashBytes).toString('hex')}`
+
+  console.log(`[invoice/create] sessionId=${sessionId} seconds=${seconds} paymentHash=${paymentHash}`)
 
   try {
     const result = await fiberClient.newInvoice({
@@ -252,12 +266,15 @@ app.post('/invoices/claim', async (c) => {
   }
 
   try {
-    // Wait for the invoice to reach "Received" status (payment arrived but not settled)
+    // Hold invoice: wait for payment to arrive ("Received"), then settle with preimage
+    console.log(`[invoice/claim] waiting for Received... paymentHash=${paymentHash}`)
+    const t0 = Date.now()
     const invoiceResult = await fiberClient.waitForInvoiceStatus(
       paymentHash as `0x${string}`,
       'Received',
-      { timeout: 60_000, interval: 1_000 },
+      { timeout: 60_000, interval: 200 },
     )
+    console.log(`[invoice/claim] got status=${invoiceResult.status} after ${Date.now() - t0}ms paymentHash=${paymentHash}`)
 
     if (invoiceResult.status !== 'Received') {
       return c.json({
@@ -266,12 +283,37 @@ app.post('/invoices/claim', async (c) => {
       }, 402)
     }
 
-    // Settle the hold invoice — release the preimage to the payer
+    // Settle the hold invoice — release the preimage so the payer's node completes
+    console.log(`[invoice/claim] calling settleInvoice... paymentHash=${paymentHash}`)
+    const t1 = Date.now()
     await fiberClient.settleInvoice({
       payment_hash: paymentHash as `0x${string}`,
       payment_preimage: hold.preimage as `0x${string}`,
     })
+    console.log(`[invoice/claim] settleInvoice returned after ${Date.now() - t1}ms paymentHash=${paymentHash}`)
+
+    // Verify the invoice actually reached "Paid" (TLC settled successfully).
+    // settleInvoice only hands the preimage to the node; TLC settlement is async.
+    // If the TLC already timed out, the invoice won't transition to Paid.
+    console.log(`[invoice/claim] waiting for Paid... paymentHash=${paymentHash}`)
+    const t2 = Date.now()
+    const paidResult = await fiberClient.waitForInvoiceStatus(
+      paymentHash as `0x${string}`,
+      'Paid',
+      { timeout: 10_000, interval: 200 },
+    )
+    console.log(`[invoice/claim] got status=${paidResult.status} after ${Date.now() - t2}ms paymentHash=${paymentHash}`)
+
+    if (paidResult.status !== 'Paid') {
+      console.log(`[invoice/claim] FAILED: status=${paidResult.status}, NOT unlocking content. paymentHash=${paymentHash}`)
+      return c.json({
+        ok: false,
+        error: `Payment not confirmed: invoice status is ${paidResult.status}`,
+      }, 402)
+    }
+
     hold.settled = true
+    console.log(`[invoice/claim] SUCCESS: unlocking ${hold.grantedSeconds}s, totalPaid=${session.totalPaidSeconds + hold.grantedSeconds}s paymentHash=${paymentHash}`)
 
     // Extend the session grant
     session.totalPaidSeconds += hold.grantedSeconds
@@ -298,6 +340,7 @@ app.post('/invoices/claim', async (c) => {
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Payment verification failed'
+    console.log(`[invoice/claim] ERROR: ${message} paymentHash=${paymentHash}`)
     return c.json({ ok: false, error: message }, 402)
   }
 })
