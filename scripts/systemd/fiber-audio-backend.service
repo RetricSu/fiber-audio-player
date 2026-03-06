@@ -23,6 +23,7 @@ StartLimitBurst=3
 # Environment
 Environment="NODE_ENV=production"
 Environment="PORT=8787"
+EnvironmentFile=%PROJECT_ROOT%/backend/.env
 
 # Logging
 StandardOutput=journal
