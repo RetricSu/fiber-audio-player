@@ -10,6 +10,13 @@ Place your source file at:
 
 You can also pass a custom input path to the script.
 
+If you do not have an audio file yet, download a sample file first:
+
+```bash
+mkdir -p media/source
+curl -L "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" -o media/source/episode.mp3
+```
+
 ## 2) Generate encrypted HLS locally
 
 From repo root:
