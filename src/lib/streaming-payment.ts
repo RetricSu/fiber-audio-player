@@ -31,6 +31,7 @@ export interface StreamGrant {
   token: string;
   playlistUrl: string;
   grantedSeconds: number;
+  segmentDurationSec: number;
   maxSegmentIndex: number;
   expiresAt: number;
 }
@@ -179,6 +180,7 @@ export class StreamingPaymentService {
         token: claimRes.stream.token,
         playlistUrl: toAbsolutePlaylistUrl(claimRes.stream.playlistUrl),
         grantedSeconds: claimRes.stream.grantedSeconds,
+        segmentDurationSec: claimRes.stream.segmentDurationSec,
         maxSegmentIndex: claimRes.stream.maxSegmentIndex,
         expiresAt: claimRes.stream.expiresAt,
       };

@@ -64,8 +64,10 @@ export function AudioPlayer({
       return;
     }
 
-    const segmentDuration = 6; // matches HLS_SEGMENT_DURATION_SEC
-    const paidUpTo = payment.currentGrant.grantedSeconds;
+    const segmentDuration = payment.currentGrant.segmentDurationSec;
+    // Use granted segment boundary rather than raw seconds so frontend and
+    // backend authorization stay aligned.
+    const paidUpTo = (payment.currentGrant.maxSegmentIndex + 1) * segmentDuration;
     // Start extending when we're within 2 segments of the boundary
     const threshold = paidUpTo - segmentDuration * 2;
 
