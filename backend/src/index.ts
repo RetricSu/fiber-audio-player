@@ -41,6 +41,18 @@ type HoldInvoice = {
   settled: boolean
 }
 
+type ClaimSuccessPayload = {
+  ok: true
+  stream: {
+    token: string
+    expiresAt: number
+    grantedSeconds: number
+    segmentDurationSec: number
+    maxSegmentIndex: number
+    playlistUrl: string
+  }
+}
+
 type StreamSession = {
   id: string
   streamToken: string
@@ -58,6 +70,7 @@ type StreamGrant = {
 }
 
 const holdInvoices = new Map<string, HoldInvoice>()
+const claimInFlight = new Map<string, Promise<ClaimSuccessPayload>>()
 const sessions = new Map<string, StreamSession>()
 const streamGrants = new Map<string, StreamGrant>()
 
@@ -256,16 +269,37 @@ app.post('/invoices/claim', async (c) => {
   if (!hold) {
     return c.json({ ok: false, error: 'Unknown payment hash' }, 400)
   }
-  if (hold.settled) {
-    return c.json({ ok: false, error: 'Invoice already settled' }, 400)
-  }
 
   const session = sessions.get(hold.sessionId)
   if (!session) {
     return c.json({ ok: false, error: 'Session expired' }, 400)
   }
 
-  try {
+  const buildStreamPayload = (): ClaimSuccessPayload => ({
+    ok: true,
+    stream: {
+      token: session.streamToken,
+      expiresAt: session.expiresAt,
+      grantedSeconds: session.totalPaidSeconds,
+      segmentDurationSec,
+      maxSegmentIndex: session.maxSegmentIndex,
+      playlistUrl: `/stream/hls/playlist.m3u8?token=${session.streamToken}`,
+    },
+  })
+
+  // Idempotency: if already settled, return current grant state instead of erroring.
+  if (hold.settled) {
+    return c.json(buildStreamPayload())
+  }
+
+  // Concurrency guard: dedupe concurrent claims for the same payment hash.
+  const existingClaim = claimInFlight.get(paymentHash)
+  if (existingClaim) {
+    const payload = await existingClaim
+    return c.json(payload)
+  }
+
+  const claimPromise = (async (): Promise<ClaimSuccessPayload> => {
     // Hold invoice: wait for payment to arrive ("Received"), then settle with preimage
     console.log(`[invoice/claim] waiting for Received... paymentHash=${paymentHash}`)
     const t0 = Date.now()
@@ -277,10 +311,14 @@ app.post('/invoices/claim', async (c) => {
     console.log(`[invoice/claim] got status=${invoiceResult.status} after ${Date.now() - t0}ms paymentHash=${paymentHash}`)
 
     if (invoiceResult.status !== 'Received') {
-      return c.json({
-        ok: false,
-        error: `Unexpected invoice status: ${invoiceResult.status}`,
-      }, 402)
+      throw new Error(
+        `Unexpected invoice status: ${invoiceResult.status}`,
+      )
+    }
+
+    // Another request may have completed while this one was waiting.
+    if (hold.settled) {
+      return buildStreamPayload()
     }
 
     // Settle the hold invoice — release the preimage so the payer's node completes
@@ -306,10 +344,7 @@ app.post('/invoices/claim', async (c) => {
 
     if (paidResult.status !== 'Paid') {
       console.log(`[invoice/claim] FAILED: status=${paidResult.status}, NOT unlocking content. paymentHash=${paymentHash}`)
-      return c.json({
-        ok: false,
-        error: `Payment not confirmed: invoice status is ${paidResult.status}`,
-      }, 402)
+      throw new Error(`Payment not confirmed: invoice status is ${paidResult.status}`)
     }
 
     hold.settled = true
@@ -327,21 +362,26 @@ app.post('/invoices/claim', async (c) => {
       grant.expiresAt = session.expiresAt
     }
 
-    return c.json({
-      ok: true,
-      stream: {
-        token: session.streamToken,
-        expiresAt: session.expiresAt,
-        grantedSeconds: session.totalPaidSeconds,
-        segmentDurationSec,
-        maxSegmentIndex: session.maxSegmentIndex,
-        playlistUrl: `/stream/hls/playlist.m3u8?token=${session.streamToken}`,
-      },
-    })
+    return buildStreamPayload()
+  })()
+
+  claimInFlight.set(paymentHash, claimPromise)
+
+  try {
+    const payload = await claimPromise
+    return c.json(payload)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Payment verification failed'
     console.log(`[invoice/claim] ERROR: ${message} paymentHash=${paymentHash}`)
+    if (message.startsWith('Unexpected invoice status:') || message.startsWith('Payment not confirmed:')) {
+      return c.json({
+        ok: false,
+        error: message,
+      }, 402)
+    }
     return c.json({ ok: false, error: message }, 402)
+  } finally {
+    claimInFlight.delete(paymentHash)
   }
 })
 

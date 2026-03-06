@@ -378,6 +378,12 @@ curl "http://localhost:8787/stream/hls/segment_000.ts?token=<token>" --output se
 - 确认通道余额充足
 - 如果通过 公共节点 中继，确保两条通道都是 `ChannelReady`
 
+### FNN 日志出现 `HoldTlcTimeout` 但后端显示 `Paid`
+
+- 若后端日志已出现 `got status=Paid` 和 `SUCCESS: unlocking ...`，通常表示业务支付已成功。
+- `HoldTlcTimeout` 在某些节点版本中可能是同一 `payment_hash` 的重试/清理路径日志，不一定代表最终支付失败。
+- 可结合前端支付结果判断：当前实现会等待 payer 侧终态（`waitForPayment`），若最终失败会直接报错。
+
 ### Invoice 状态一直是 Open，没有变成 Received
 
 - 支付可能没有发出去，检查用户节点日志
@@ -404,10 +410,10 @@ curl "http://localhost:8787/stream/hls/segment_000.ts?token=<token>" --output se
 |------|---------|------|
 | Next.js 前端 | 3000 | 浏览器访问入口 |
 | Hono 后端 | 8787 | API 服务器 |
-| 开发者 Fiber RPC | 28229 | 后端连接此节点创建/结算 invoice |
-| 开发者 Fiber P2P | 28228 | 节点间通信 |
-| 用户 Fiber RPC | 8229 | 前端连接此节点发送支付 |
-| 用户 Fiber P2P | 8230 | 节点间通信 |
+| 开发者 Fiber RPC | 8229 | 后端连接此节点创建/结算 invoice |
+| 开发者 Fiber P2P | 8228 | 节点间通信 |
+| 用户 Fiber RPC | 28229 | 前端连接此节点发送支付 |
+| 用户 Fiber P2P | 28228 | 节点间通信 |
 
 ---
 

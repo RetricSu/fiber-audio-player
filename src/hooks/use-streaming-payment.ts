@@ -41,7 +41,18 @@ export function useStreamingPayment(
     const unsubPayment = service.onPayment((tick) => {
       setLastPayment(tick);
       setTotalPaid(formatShannon(tick.totalPaidShannon));
-      setPaymentHistory((prev) => [...prev.slice(-50), tick]);
+      setPaymentHistory((prev) => {
+        // One row per invoice/payment hash: update status in place (pending -> success/failed).
+        if (tick.paymentHash) {
+          const index = prev.findIndex((p) => p.paymentHash === tick.paymentHash);
+          if (index >= 0) {
+            const next = [...prev];
+            next[index] = tick;
+            return next.slice(-50);
+          }
+        }
+        return [...prev.slice(-50), tick];
+      });
 
       if (tick.status === 'failed' && tick.error) {
         setError(tick.error);

@@ -45,6 +45,7 @@ export class StreamingPaymentService {
   private callbacks: Set<PaymentCallback> = new Set();
   private grantCallbacks: Set<StreamGrantCallback> = new Set();
   private paymentInFlight = false;
+  private startInFlight: Promise<StreamGrant> | null = null;
 
   // Session state
   private sessionId: string | null = null;
@@ -81,6 +82,10 @@ export class StreamingPaymentService {
    * @returns The initial stream grant (playlist URL, token, etc.)
    */
   async startStreaming(seconds: number = 30): Promise<StreamGrant> {
+    if (this.startInFlight) {
+      return this.startInFlight;
+    }
+
     if (this.isStreaming && this.currentGrant) {
       return this.currentGrant;
     }
@@ -89,15 +94,22 @@ export class StreamingPaymentService {
       throw new Error('Recipient public key is required to start streaming payments.');
     }
 
-    // 1. Create a backend session
-    const sessionRes = await createSession();
-    this.sessionId = sessionRes.session.sessionId;
+    this.startInFlight = (async () => {
+      // 1. Create a backend session
+      const sessionRes = await createSession();
+      this.sessionId = sessionRes.session.sessionId;
 
-    this.isStreaming = true;
+      this.isStreaming = true;
 
-    // 2. Pay for the first batch
-    const grant = await this.payForSeconds(seconds);
-    return grant;
+      // 2. Pay for the first batch
+      return this.payForSeconds(seconds);
+    })();
+
+    try {
+      return await this.startInFlight;
+    } finally {
+      this.startInFlight = null;
+    }
   }
 
   /**
@@ -123,26 +135,45 @@ export class StreamingPaymentService {
     const { invoiceAddress, paymentHash, amountShannon: amountHex } = invoiceRes.invoice;
     const amountShannon = fromHex(amountHex as `0x${string}`);
 
-    const tick: PaymentTick = {
+    const tickBase = {
       timestamp: Date.now(),
       amountShannon,
-      totalPaidShannon: this.totalPaid,
       paymentHash,
-      status: 'pending',
     };
-    this.notifyPayment(tick);
+    this.notifyPayment({
+      ...tickBase,
+      totalPaidShannon: this.totalPaid,
+      status: 'pending',
+    });
 
     try {
       // 2. Send payment and claim grant concurrently.
       // sendPayment blocks until the payee settles (releases preimage),
       // and the backend only settles inside /invoices/claim — so these
       // MUST run in parallel to avoid a deadlock.
-      const [_payResult, claimRes] = await Promise.all([
+      const [payResult, claimRes] = await Promise.all([
         this.client.sendPayment({
           invoice: invoiceAddress as `0x${string}`,
+          // Keep one TLC part per invoice to reduce duplicate timeout logs
+          // for the same payment hash in node logs.
+          max_parts: toHex(1n),
         }),
         claimInvoice({ paymentHash }),
       ]);
+
+      // sendPayment may return an intermediate state on some node versions.
+      // Resolve to a terminal status so UI/backend success aligns with payer state.
+      const finalPayResult =
+        payResult.status === 'Created' || payResult.status === 'Inflight'
+          ? await this.client.waitForPayment(payResult.payment_hash as `0x${string}`, {
+              timeout: 30_000,
+              interval: 300,
+            })
+          : payResult;
+
+      if (finalPayResult.status === 'Failed') {
+        throw new Error(finalPayResult.failed_error || 'Payment failed on payer node.');
+      }
 
       const grant: StreamGrant = {
         token: claimRes.stream.token,
@@ -155,17 +186,21 @@ export class StreamingPaymentService {
       this.currentGrant = grant;
       this.totalPaid += amountShannon;
 
-      tick.status = 'success';
-      tick.totalPaidShannon = this.totalPaid;
-      this.notifyPayment(tick);
+      this.notifyPayment({
+        ...tickBase,
+        totalPaidShannon: this.totalPaid,
+        status: 'success',
+      });
       this.notifyGrant(grant);
 
       return grant;
     } catch (error) {
-      tick.status = 'failed';
-      tick.error = error instanceof Error ? error.message : 'Unknown error';
-      tick.totalPaidShannon = this.totalPaid;
-      this.notifyPayment(tick);
+      this.notifyPayment({
+        ...tickBase,
+        totalPaidShannon: this.totalPaid,
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
       throw error;
     } finally {
       this.paymentInFlight = false;
