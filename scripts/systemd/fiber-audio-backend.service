@@ -9,7 +9,7 @@ User=root
 WorkingDirectory=%PROJECT_ROOT%
 
 # Pre-start: install dependencies and build
-ExecStartPre=/bin/bash -c 'cd %PROJECT_ROOT%/backend && pnpm install && pnpm build:api'
+ExecStartPre=/bin/bash -c 'cd %PROJECT_ROOT% && pnpm install && pnpm build:api'
 
 # Start the application
 ExecStart=/usr/bin/node %PROJECT_ROOT%/backend/dist/index.js
@@ -32,7 +32,6 @@ SyslogIdentifier=fiber-audio-backend
 # Security (optional but recommended)
 NoNewPrivileges=true
 ProtectSystem=strict
-ProtectHome=true
 ReadWritePaths=%PROJECT_ROOT%
 
 [Install]

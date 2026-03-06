@@ -163,7 +163,7 @@ reload_systemd() {
 # Function to install and build backend
 build_backend() {
     print_info "Installing backend dependencies..."
-    cd "$PROJECT_ROOT/backend"
+    cd "$PROJECT_ROOT"
     pnpm install
     print_success "Dependencies installed"
     
