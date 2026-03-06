@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import Hls from 'hls.js';
 
 export interface AudioState {
   isPlaying: boolean;
@@ -24,6 +25,7 @@ export interface UseAudioPlayerResult extends AudioState {
 
 export function useAudioPlayer(src: string): UseAudioPlayerResult {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const hlsRef = useRef<Hls | null>(null);
   const [state, setState] = useState<AudioState>({
     isPlaying: false,
     currentTime: 0,
@@ -36,7 +38,8 @@ export function useAudioPlayer(src: string): UseAudioPlayerResult {
   });
 
   useEffect(() => {
-    const audio = new Audio(src);
+    const audio = new Audio();
+    audio.preload = 'auto';
     audioRef.current = audio;
 
     const handleLoadedMetadata = () => {
@@ -94,6 +97,8 @@ export function useAudioPlayer(src: string): UseAudioPlayerResult {
 
     return () => {
       audio.pause();
+      hlsRef.current?.destroy();
+      hlsRef.current = null;
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('progress', handleProgress);
@@ -103,6 +108,72 @@ export function useAudioPlayer(src: string): UseAudioPlayerResult {
       audio.removeEventListener('error', handleError);
       audio.removeEventListener('waiting', handleWaiting);
       audio.removeEventListener('canplay', handleCanPlay);
+    };
+  }, []);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    setState((s) => ({ ...s, isLoading: true, error: null, currentTime: 0 }));
+
+    hlsRef.current?.destroy();
+    hlsRef.current = null;
+    audio.pause();
+    audio.removeAttribute('src');
+    audio.load();
+
+    if (!src) {
+      setState((s) => ({ ...s, isLoading: false, error: 'Audio source is empty' }));
+      return;
+    }
+
+    const isHls = src.includes('.m3u8');
+
+    if (!isHls) {
+      audio.src = src;
+      audio.load();
+      return;
+    }
+
+    if (audio.canPlayType('application/vnd.apple.mpegurl')) {
+      audio.src = src;
+      audio.load();
+      return;
+    }
+
+    if (!Hls.isSupported()) {
+      setState((s) => ({
+        ...s,
+        isLoading: false,
+        error: 'HLS is not supported in this browser',
+      }));
+      return;
+    }
+
+    const hls = new Hls({
+      enableWorker: true,
+      lowLatencyMode: false,
+    });
+
+    hlsRef.current = hls;
+    hls.loadSource(src);
+    hls.attachMedia(audio);
+
+    hls.on(Hls.Events.ERROR, (_event, data) => {
+      if (!data.fatal) return;
+      setState((s) => ({
+        ...s,
+        isLoading: false,
+        error: `HLS error: ${data.type}`,
+      }));
+    });
+
+    return () => {
+      hls.destroy();
+      if (hlsRef.current === hls) {
+        hlsRef.current = null;
+      }
     };
   }, [src]);
 
@@ -115,6 +186,7 @@ export function useAudioPlayer(src: string): UseAudioPlayerResult {
           ...s,
           error: err instanceof Error ? err.message : 'Playback failed',
         }));
+        throw err;
       }
     }
   }, []);

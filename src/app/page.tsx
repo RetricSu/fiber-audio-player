@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { AudioPlayer } from '@/components/AudioPlayer';
 import { NodeStatus } from '@/components/NodeStatus';
 import { PaymentHistory } from '@/components/PaymentHistory';
 import { useFiberNode } from '@/hooks/use-fiber-node';
 import { useStreamingPayment } from '@/hooks/use-streaming-payment';
+import { getBackendNodeInfo } from '@/lib/stream-auth';
 
 // Demo episode data
 const DEMO_EPISODE = {
@@ -24,33 +25,40 @@ const DEMO_EPISODE = {
 };
 
 // Default configuration
-const DEFAULT_RPC_URL = 'http://127.0.0.1:8229';
+const DEFAULT_RPC_URL = 'http://127.0.0.1:28229';
 const FAUCET_URL = 'https://testnet.ckbapp.dev/';
-const DEFAULT_PAYMENT_INTERVAL_MS = 10000;
 
-// Recipient pubkey is fixed at deploy time by the podcast owner
-const RECIPIENT_PUBKEY = process.env.NEXT_PUBLIC_RECIPIENT_PUBKEY || '';
-const RECIPIENT_MULTIADDR = process.env.NEXT_PUBLIC_RECIPIENT_MULTIADDR || '';
-const parsedPaymentInterval = Number(process.env.NEXT_PUBLIC_PAYMENT_INTERVAL_MS || DEFAULT_PAYMENT_INTERVAL_MS);
-const PAYMENT_INTERVAL_MS =
-  Number.isFinite(parsedPaymentInterval) && parsedPaymentInterval > 0
-    ? parsedPaymentInterval
-    : DEFAULT_PAYMENT_INTERVAL_MS;
+// Bootnode multiaddr — for the user's node to join the Fiber network.
+// NOT the payment recipient. The recipient pubkey is fetched from the backend's /node-info.
+const BOOTNODE_MULTIADDR = process.env.NEXT_PUBLIC_BOOTNODE_MULTIADDR || '';
 
 export default function Home() {
   const [rpcUrl, setRpcUrl] = useState(DEFAULT_RPC_URL);
 
+  // Auto-fetch the developer node's pubkey from backend /node-info
+  const [recipientPubkey, setRecipientPubkey] = useState('');
+  const [backendError, setBackendError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getBackendNodeInfo()
+      .then((info) => {
+        setRecipientPubkey(info.nodeId);
+        setBackendError(null);
+      })
+      .catch((err) => {
+        setBackendError(err instanceof Error ? err.message : 'Failed to reach backend');
+      });
+  }, []);
+
   const fiberNode = useFiberNode(rpcUrl, {
-    recipientPubkey: RECIPIENT_PUBKEY,
-    recipientMultiaddr: RECIPIENT_MULTIADDR,
+    recipientPubkey,
+    recipientMultiaddr: BOOTNODE_MULTIADDR,
   });
 
-  // For payment history, we need to track payments
   const payment = useStreamingPayment({
     rpcUrl,
-    recipientPubkey: RECIPIENT_PUBKEY,
+    recipientPubkey,
     ratePerSecond: DEMO_EPISODE.pricePerSecond,
-    paymentIntervalMs: PAYMENT_INTERVAL_MS,
   });
 
   return (
@@ -150,10 +158,10 @@ export default function Home() {
                 isFundingSufficient={fiberNode.isFundingSufficient}
                 fundingBalanceError={fiberNode.fundingBalanceError}
                 faucetUrl={FAUCET_URL}
-                recipientPubkey={RECIPIENT_PUBKEY}
-                recipientMultiaddrConfigured={Boolean(RECIPIENT_MULTIADDR.trim())}
-                onCheckRoute={() => fiberNode.checkPaymentRoute(RECIPIENT_PUBKEY)}
-                onOpenChannel={() => fiberNode.setupChannel(RECIPIENT_PUBKEY)}
+                recipientPubkey={recipientPubkey}
+                recipientMultiaddrConfigured={Boolean(BOOTNODE_MULTIADDR.trim())}
+                onCheckRoute={() => fiberNode.checkPaymentRoute(recipientPubkey)}
+                onOpenChannel={() => fiberNode.setupChannel(recipientPubkey)}
                 onCancelSetup={fiberNode.cancelChannelSetup}
                 topConfigPanel={
                   !fiberNode.isConnected ? (
@@ -166,7 +174,7 @@ export default function Home() {
                         value={rpcUrl}
                         onChange={(e) => setRpcUrl(e.target.value)}
                         className="w-full px-3 py-2 bg-fiber-dark border border-fiber-border rounded-lg text-sm font-mono text-white focus:outline-none focus:border-fiber-accent/50 transition-colors"
-                        placeholder="http://127.0.0.1:8229"
+                        placeholder="http://127.0.0.1:28229"
                       />
                     </div>
                   ) : null

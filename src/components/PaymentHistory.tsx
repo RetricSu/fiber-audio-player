@@ -35,7 +35,7 @@ export function PaymentHistory({ payments }: PaymentHistoryProps) {
             <div className="divide-y divide-fiber-border/30">
               {recentPayments.map((payment, index) => (
                 <motion.div
-                  key={payment.timestamp}
+                  key={`${payment.timestamp}-${payment.paymentHash ?? index}`}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}

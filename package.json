@@ -3,13 +3,25 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build",
+    "dev": "pnpm -r --parallel --filter . --filter ./backend dev:app",
+    "dev:web": "next dev --turbopack",
+    "dev:api": "pnpm -C backend dev",
+    "dev:app": "next dev --turbopack",
+    "build": "pnpm -r --filter . --filter ./backend build:app",
+    "build:vercel": "next build",
+    "build:web": "next build",
+    "build:api": "pnpm -C backend build",
+    "build:app": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "typecheck": "pnpm -r --filter . --filter ./backend typecheck:app",
+    "typecheck:app": "tsc --noEmit",
+    "typecheck:web": "tsc --noEmit",
+    "typecheck:api": "pnpm -C backend typecheck"
   },
   "dependencies": {
     "@fiber-pay/sdk": "0.1.0-rc.5",
+    "hls.js": "^1.6.13",
     "motion": "^12.4.7",
     "next": "15.5.12",
     "react": "^19.0.0",

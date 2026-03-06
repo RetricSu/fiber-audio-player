@@ -21,6 +21,21 @@ This demo showcases how content creators can monetize their podcasts using Fiber
 - ⚡ Keysend support (spontaneous payments without invoices)
 - 🔧 Configurable payment rates and intervals
 
+## Workspace Layout
+
+This repository is now a `pnpm workspace` with:
+
+- `.` (root): Next.js frontend
+- `backend`: Hono TypeScript API server
+
+## Progressive Server-side Authorization (Current Stage)
+
+- Payment verification endpoint is implemented as **dummy agree** for now.
+- Backend issues short-lived stream authorization tokens based on approved seconds.
+- Encrypted HLS generation is done manually by a local script (not by backend runtime).
+
+See full setup guide: `docs/hls-manual-setup.md`
+
 ## Getting Started
 
 ### Prerequisites
@@ -35,11 +50,20 @@ This demo showcases how content creators can monetize their podcasts using Fiber
 # Install dependencies
 pnpm install
 
-# Run development server
+# Run frontend + backend together
 pnpm dev
+
+# Run only frontend
+pnpm dev:web
+
+# Run only backend
+pnpm dev:api
 
 # Build for production
 pnpm build
+
+# Type check frontend + backend
+pnpm typecheck
 ```
 
 ### Configuration
@@ -59,6 +83,12 @@ NEXT_PUBLIC_RECIPIENT_MULTIADDR=/ip4/127.0.0.1/tcp/8228/p2p/Qm...
 
 # Optional: payment tick interval in milliseconds (default 10000 = 10 seconds)
 NEXT_PUBLIC_PAYMENT_INTERVAL_MS=10000
+
+# Optional: backend URL for payment verify + stream authorization
+NEXT_PUBLIC_BACKEND_BASE_URL=http://localhost:8787
+
+# Optional: requested playback window for authorization (seconds)
+NEXT_PUBLIC_STREAM_REQUESTED_SECONDS=30
 ```
 
 **For listeners**, configure your Fiber node RPC URL in the app UI (default: `http://127.0.0.1:8229`).

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAudioPlayer } from '@/hooks/use-audio-player';
 import { UseStreamingPaymentResult } from '@/hooks/use-streaming-payment';
+import { toAbsolutePlaylistUrl } from '@/lib/stream-auth';
 import { WaveformVisualizer } from './WaveformVisualizer';
 import { PaymentFlowVisualizer } from './PaymentFlowVisualizer';
 
@@ -38,12 +39,45 @@ export function AudioPlayer({
   isRouteReady,
   payment,
 }: AudioPlayerProps) {
+  const chunkSeconds = Math.max(
+    1,
+    Number(process.env.NEXT_PUBLIC_STREAM_CHUNK_SECONDS ?? 30)
+  );
   const [volume, setVolumeState] = useState(0.8);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
   const [playbackGuardError, setPlaybackGuardError] = useState<string | null>(null);
+  const [playbackSrc, setPlaybackSrc] = useState(episode.audioUrl);
   const wasPlayingRef = useRef(false);
+  const shouldAutoPlayAfterAuthorizeRef = useRef(false);
 
-  const audio = useAudioPlayer(episode.audioUrl);
+  const audio = useAudioPlayer(playbackSrc);
+
+  // Auto-extend: when playback approaches the paid segment boundary, pay for more
+  const isExtendingRef = useRef(false);
+  useEffect(() => {
+    if (
+      !audio.isPlaying ||
+      !payment.isStreaming ||
+      !payment.currentGrant ||
+      isExtendingRef.current
+    ) {
+      return;
+    }
+
+    const segmentDuration = payment.currentGrant.segmentDurationSec;
+    // Use granted segment boundary rather than raw seconds so frontend and
+    // backend authorization stay aligned.
+    const paidUpTo = (payment.currentGrant.maxSegmentIndex + 1) * segmentDuration;
+    // Start extending when we're within 2 segments of the boundary
+    const threshold = paidUpTo - segmentDuration * 2;
+
+    if (audio.currentTime >= threshold && threshold > 0) {
+      isExtendingRef.current = true;
+      payment.extend(chunkSeconds)
+        .catch(() => { /* error is surfaced via payment.error */ })
+        .finally(() => { isExtendingRef.current = false; });
+    }
+  }, [audio.currentTime, audio.isPlaying, payment, chunkSeconds]);
 
   // Ensure payment stream is stopped when playback actually transitions from playing to stopped.
   // This avoids stopping during startup while waiting for the audio play event.
@@ -63,6 +97,17 @@ export function AudioPlayer({
     }
   }, [audio, payment]);
 
+  useEffect(() => {
+    if (!shouldAutoPlayAfterAuthorizeRef.current) {
+      return;
+    }
+
+    shouldAutoPlayAfterAuthorizeRef.current = false;
+    audio.play().catch(() => {
+      setPlaybackGuardError('Playback failed after authorization.');
+    });
+  }, [audio, playbackSrc]);
+
   const handlePlayPause = useCallback(async () => {
     if (audio.isPlaying) {
       audio.pause();
@@ -80,15 +125,25 @@ export function AudioPlayer({
 
       setPlaybackGuardError(null);
 
-      const started = await payment.start();
-      if (!started) {
-        setPlaybackGuardError(payment.error || 'Unable to start payment stream.');
-        return;
-      }
+      try {
+        // Start streaming: creates session → invoice → pay → claim → returns grant
+        const grant = await payment.start(chunkSeconds);
+        if (!grant) {
+          setPlaybackGuardError(payment.error || 'Unable to start payment stream.');
+          return;
+        }
 
-      await audio.play();
+        // Set HLS playlist URL from the grant
+        shouldAutoPlayAfterAuthorizeRef.current = true;
+        setPlaybackSrc(grant.playlistUrl);
+      } catch (error) {
+        await payment.stop();
+        setPlaybackGuardError(
+          error instanceof Error ? error.message : 'Failed to authorize stream playback.'
+        );
+      }
     }
-  }, [audio, isFiberConnected, isRouteReady, payment]);
+  }, [audio, isFiberConnected, isRouteReady, payment, chunkSeconds]);
 
   const handleSeek = useCallback(
     (progress: number) => {

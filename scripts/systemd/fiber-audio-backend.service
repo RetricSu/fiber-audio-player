@@ -1,0 +1,38 @@
+[Unit]
+Description=Fiber Audio Player Backend Service
+Documentation=https://github.com/nervosnetwork/fiber
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=%PROJECT_ROOT%
+
+# Pre-start: install dependencies and build
+ExecStartPre=/bin/bash -c 'cd %PROJECT_ROOT% && pnpm install && pnpm build:api'
+
+# Start the application
+ExecStart=/usr/bin/node %PROJECT_ROOT%/backend/dist/index.js
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+StartLimitInterval=60s
+StartLimitBurst=3
+
+# Environment
+Environment="NODE_ENV=production"
+Environment="PORT=8787"
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=fiber-audio-backend
+
+# Security (optional but recommended)
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=%PROJECT_ROOT%
+
+[Install]
+WantedBy=multi-user.target
