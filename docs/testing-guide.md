@@ -48,7 +48,7 @@ pnpm add -g @fiber-pay/cli
 fiber-pay --version
 ```
 
-如果已安装，确认版本 ≥ 0.1.0-rc.5。
+如果已安装，确认版本 ≥ 0.1.0-rc.7。
 
 ---
 
@@ -106,7 +106,7 @@ fiber-pay node status
 查看节点地址：
 
 ```bash
-fiber-pay node status
+fiber-pay wallet address 
 ```
 
 前往 CKB testnet faucet 获取测试币：
@@ -116,7 +116,7 @@ fiber-pay node status
 把显示的 funding addr 粘贴过去，申请测试币。等待几分钟后可查看余额：
 
 ```bash
-fiber-pay node status
+fiber-pay wallet balance
 ```
 
 ### 2.4 连接 公共节点
@@ -158,7 +158,7 @@ fiber-pay --profile user node status
 ### 3.3 给 user 节点充值
 
 ```bash
-fiber-pay --profile user node status
+fiber-pay --profile user wallet address
 ```
 
 同样前往 faucet 领取测试币并等待到账。
