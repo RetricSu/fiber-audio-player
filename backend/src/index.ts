@@ -5,6 +5,7 @@ import { cors } from 'hono/cors'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
+import { fileURLToPath } from 'node:url'
 import { blake2b } from '@noble/hashes/blake2.js'
 import {
   FiberRpcClient,
@@ -108,7 +109,17 @@ function derivePaymentHash(preimageBytes: Uint8Array, algorithm: InvoiceHashAlgo
 
 const segmentDurationSec = Number(process.env.HLS_SEGMENT_DURATION_SEC ?? 6)
 const authTtlSec = Number(process.env.STREAM_AUTH_TTL_SEC ?? 300)
-const hlsDir = path.resolve(process.cwd(), process.env.HLS_DIR ?? '../media/hls')
+
+// Resolve media path relative to backend root so runtime CWD (systemd, pnpm, etc.)
+// does not affect where HLS assets are loaded from.
+const currentFilePath = fileURLToPath(import.meta.url)
+const backendRootDir = path.resolve(path.dirname(currentFilePath), '..')
+const hlsDirFromEnv = process.env.HLS_DIR?.trim()
+const hlsDir = hlsDirFromEnv
+  ? (path.isAbsolute(hlsDirFromEnv)
+      ? path.normalize(hlsDirFromEnv)
+      : path.resolve(backendRootDir, hlsDirFromEnv))
+  : path.resolve(backendRootDir, '../media/hls')
 
 function toSegmentIndex(seconds: number): number {
   return Math.max(0, Math.ceil(seconds / segmentDurationSec) - 1)
