@@ -8,6 +8,7 @@
     "dev:api": "pnpm -C backend dev",
     "dev:app": "next dev --turbopack",
     "build": "pnpm -r --filter . --filter ./backend build:app",
+    "build:vercel": "next build",
     "build:web": "next build",
     "build:api": "pnpm -C backend build",
     "build:app": "next build",
