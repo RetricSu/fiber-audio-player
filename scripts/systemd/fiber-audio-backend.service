@@ -6,7 +6,7 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=%PROJECT_ROOT%
+WorkingDirectory=%PROJECT_ROOT%/backend
 
 # Pre-start: install dependencies and build
 ExecStartPre=/bin/bash -c 'cd %PROJECT_ROOT% && pnpm install && pnpm build:api'
