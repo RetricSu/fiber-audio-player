@@ -4,7 +4,7 @@ import { serve } from '@hono/node-server'
 import { cors } from 'hono/cors'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { blake2b } from '@noble/hashes/blake2.js'
 import {
   FiberRpcClient,
@@ -24,6 +24,20 @@ const FIBER_RPC_URL = process.env.FIBER_RPC_URL || 'http://127.0.0.1:8227'
 const PRICE_PER_SECOND_SHANNON = BigInt(process.env.PRICE_PER_SECOND_SHANNON ?? '10000') // 0.0001 CKB
 const INVOICE_CURRENCY = (process.env.INVOICE_CURRENCY ?? 'Fibd') as Currency
 const INVOICE_EXPIRY_SEC = Number(process.env.INVOICE_EXPIRY_SEC ?? 600)
+type InvoiceHashAlgorithm = 'ckb_hash' | 'sha256'
+
+function resolveInvoiceHashAlgorithm(value: string | undefined): InvoiceHashAlgorithm {
+  // NOTE(retricsu/fiber-pay#66): SDK type currently exposes `CkbHash | Sha256`,
+  // while FNN RPC expects `ckb_hash | sha256`. We normalize here to the RPC
+  // wire values so both env styles keep working.
+  const normalized = (value ?? 'CkbHash').trim().toLowerCase()
+  if (normalized === 'sha256') {
+    return 'sha256'
+  }
+  return 'ckb_hash'
+}
+
+const INVOICE_HASH_ALGORITHM = resolveInvoiceHashAlgorithm(process.env.INVOICE_HASH_ALGORITHM)
 
 const fiberClient = new FiberRpcClient({ url: FIBER_RPC_URL, timeout: 15_000 })
 
@@ -80,6 +94,16 @@ const CKB_HASH_PERSONALIZATION = Uint8Array.from(
 )
 function ckbHash(data: Uint8Array): Uint8Array {
   return blake2b(data, { dkLen: 32, personalization: CKB_HASH_PERSONALIZATION })
+}
+
+function derivePaymentHash(preimageBytes: Uint8Array, algorithm: InvoiceHashAlgorithm): string {
+  if (algorithm === 'sha256') {
+    const digest = createHash('sha256').update(Buffer.from(preimageBytes)).digest('hex')
+    return `0x${digest}`
+  }
+
+  const hashBytes = ckbHash(preimageBytes)
+  return `0x${Buffer.from(hashBytes).toString('hex')}`
 }
 
 const segmentDurationSec = Number(process.env.HLS_SEGMENT_DURATION_SEC ?? 6)
@@ -208,24 +232,33 @@ app.post('/invoices/create', async (c) => {
   const seconds = Math.max(1, Math.floor(Number(body.seconds ?? 30)))
   const amountShannon = PRICE_PER_SECOND_SHANNON * BigInt(seconds)
 
-  // Generate preimage and derive payment_hash using CkbHash (blake2b-256)
+  // Generate preimage and derive payment_hash using configured algorithm
   const preimage = randomBytes32() as string
   const preimageBytes = Uint8Array.from(
     Buffer.from(preimage.replace(/^0x/, ''), 'hex'),
   )
-  const hashBytes = ckbHash(preimageBytes)
-  const paymentHash = `0x${Buffer.from(hashBytes).toString('hex')}`
+  const paymentHash = derivePaymentHash(preimageBytes, INVOICE_HASH_ALGORITHM)
 
-  console.log(`[invoice/create] sessionId=${sessionId} seconds=${seconds} paymentHash=${paymentHash}`)
+  console.log(`[invoice/create] sessionId=${sessionId} seconds=${seconds} hashAlgorithm=${INVOICE_HASH_ALGORITHM} paymentHash=${paymentHash}`)
 
   try {
-    const result = await fiberClient.newInvoice({
+    const invoiceParams: Parameters<typeof fiberClient.newInvoice>[0] = {
       amount: toHex(amountShannon) as `0x${string}`,
       currency: INVOICE_CURRENCY,
       payment_hash: paymentHash as `0x${string}`,
       description: `Audio stream: ${seconds}s`,
       expiry: toHex(BigInt(INVOICE_EXPIRY_SEC)) as `0x${string}`,
-    })
+    }
+
+    // Compatibility: older nodes may reject unknown params.
+    // For default CkbHash, omitting hash_algorithm keeps backward compatibility.
+    if (INVOICE_HASH_ALGORITHM !== 'ckb_hash') {
+      // NOTE(retricsu/fiber-pay#66): keep this bridge cast until SDK hash
+      // algorithm values are aligned with FNN RPC wire enum names.
+      ;(invoiceParams as unknown as { hash_algorithm?: string }).hash_algorithm = INVOICE_HASH_ALGORITHM
+    }
+
+    const result = await fiberClient.newInvoice(invoiceParams)
 
     holdInvoices.set(paymentHash, {
       paymentHash,
@@ -249,6 +282,20 @@ app.post('/invoices/create', async (c) => {
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to create invoice'
+    if (
+      INVOICE_HASH_ALGORITHM === 'sha256' &&
+      /Invalid params/i.test(message)
+    ) {
+      return c.json(
+        {
+          ok: false,
+          error:
+            'FNN does not support new_invoice.hash_algorithm=Sha256 on this version. ' +
+            'Upgrade Fiber node to v0.7.1+ or set INVOICE_HASH_ALGORITHM=CkbHash.',
+        },
+        500,
+      )
+    }
     return c.json({ ok: false, error: message }, 500)
   }
 })
