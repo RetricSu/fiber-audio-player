@@ -127,7 +127,7 @@ export function AudioPlayer({
 
       try {
         // Start streaming: creates session → invoice → pay → claim → returns grant
-        const grant = await payment.start(chunkSeconds);
+        const grant = await payment.start(episode.id, chunkSeconds);
         if (!grant) {
           setPlaybackGuardError(payment.error || 'Unable to start payment stream.');
           return;
