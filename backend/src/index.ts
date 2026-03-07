@@ -88,10 +88,137 @@ type StreamGrant = {
   sessionId: string
 }
 
-const holdInvoices = new Map<string, HoldInvoice>()
+// Concurrency guard for claim operations (in-memory only, not for persistence)
 const claimInFlight = new Map<string, Promise<ClaimSuccessPayload>>()
-const sessions = new Map<string, StreamSession>()
-const streamGrants = new Map<string, StreamGrant>()
+
+// Database helper functions for stream_sessions
+function insertStreamSession(session: StreamSession): void {
+  db.prepare(`
+    INSERT INTO stream_sessions (id, episode_id, stream_token, total_paid_seconds, max_segment_index, expires_at, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    session.id,
+    session.episodeId,
+    session.streamToken,
+    session.totalPaidSeconds,
+    session.maxSegmentIndex,
+    session.expiresAt,
+    session.createdAt
+  )
+}
+
+function getStreamSessionById(sessionId: string): StreamSession | undefined {
+  const row = db.prepare('SELECT * FROM stream_sessions WHERE id = ?').get(sessionId) as {
+    id: string
+    episode_id: string
+    stream_token: string
+    total_paid_seconds: number
+    max_segment_index: number
+    expires_at: number
+    created_at: number
+  } | undefined
+  
+  if (!row) return undefined
+  
+  return {
+    id: row.id,
+    episodeId: row.episode_id,
+    streamToken: row.stream_token,
+    totalPaidSeconds: row.total_paid_seconds,
+    maxSegmentIndex: row.max_segment_index,
+    expiresAt: row.expires_at,
+    createdAt: row.created_at,
+  }
+}
+
+function getStreamSessionByToken(streamToken: string): StreamSession | undefined {
+  const row = db.prepare('SELECT * FROM stream_sessions WHERE stream_token = ?').get(streamToken) as {
+    id: string
+    episode_id: string
+    stream_token: string
+    total_paid_seconds: number
+    max_segment_index: number
+    expires_at: number
+    created_at: number
+  } | undefined
+  
+  if (!row) return undefined
+  
+  return {
+    id: row.id,
+    episodeId: row.episode_id,
+    streamToken: row.stream_token,
+    totalPaidSeconds: row.total_paid_seconds,
+    maxSegmentIndex: row.max_segment_index,
+    expiresAt: row.expires_at,
+    createdAt: row.created_at,
+  }
+}
+
+function updateStreamSession(session: StreamSession): void {
+  db.prepare(`
+    UPDATE stream_sessions 
+    SET total_paid_seconds = ?, max_segment_index = ?, expires_at = ?
+    WHERE id = ?
+  `).run(
+    session.totalPaidSeconds,
+    session.maxSegmentIndex,
+    session.expiresAt,
+    session.id
+  )
+}
+
+// Database helper functions for payments
+function insertPayment(payment: HoldInvoice): void {
+  db.prepare(`
+    INSERT INTO payments (id, session_id, payment_hash, preimage, amount_shannon, granted_seconds, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    randomUUID(),
+    payment.sessionId,
+    payment.paymentHash,
+    payment.preimage,
+    payment.amountShannon.toString(),
+    payment.grantedSeconds,
+    payment.settled ? 'settled' : 'pending',
+    payment.createdAt
+  )
+}
+
+function getPaymentByHash(paymentHash: string): HoldInvoice | undefined {
+  const row = db.prepare('SELECT * FROM payments WHERE payment_hash = ?').get(paymentHash) as {
+    id: string
+    session_id: string
+    payment_hash: string
+    preimage: string
+    amount_shannon: string
+    granted_seconds: number
+    status: string
+    created_at: number
+    settled_at: number | null
+  } | undefined
+  
+  if (!row) return undefined
+  
+  return {
+    paymentHash: row.payment_hash,
+    preimage: row.preimage,
+    invoiceAddress: '', // Not stored in DB, will be returned from API
+    amountShannon: BigInt(row.amount_shannon),
+    grantedSeconds: row.granted_seconds,
+    sessionId: row.session_id,
+    createdAt: row.created_at,
+    settled: row.status === 'settled',
+  }
+}
+
+function updatePaymentAsSettled(paymentHash: string): void {
+  db.prepare(`
+    UPDATE payments 
+    SET status = ?, settled_at = ?, preimage = preimage
+    WHERE payment_hash = ?
+  `).run('settled', Date.now(), paymentHash)
+}
 
 // CKB blake2b-256 with personalization "ckb-default-hash"
 const CKB_HASH_PERSONALIZATION = Uint8Array.from(
@@ -240,15 +367,7 @@ app.post('/sessions/create', async (c) => {
       expiresAt,
       createdAt: Date.now(),
     }
-    sessions.set(sessionId, session)
-
-    // Also create the grant entry so the token can be validated (but 0 segments)
-    streamGrants.set(streamToken, {
-      token: streamToken,
-      expiresAt,
-      maxSegmentIndex: -1,
-      sessionId,
-    })
+    insertStreamSession(session)
 
     return c.json({
       ok: true,
@@ -277,7 +396,7 @@ app.post('/invoices/create', async (c) => {
   }
 
   const sessionId = body.sessionId ?? ''
-  const session = sessions.get(sessionId)
+  const session = getStreamSessionById(sessionId)
   if (!session) {
     return c.json({ ok: false, error: 'Invalid sessionId' }, 400)
   }
@@ -325,7 +444,7 @@ app.post('/invoices/create', async (c) => {
 
     const result = await fiberClient.newInvoice(invoiceParams)
 
-    holdInvoices.set(paymentHash, {
+    const holdInvoice: HoldInvoice = {
       paymentHash,
       preimage,
       invoiceAddress: result.invoice_address,
@@ -334,7 +453,8 @@ app.post('/invoices/create', async (c) => {
       sessionId,
       createdAt: Date.now(),
       settled: false,
-    })
+    }
+    insertPayment(holdInvoice)
 
     return c.json({
       ok: true,
@@ -377,12 +497,12 @@ app.post('/invoices/claim', async (c) => {
   }
 
   const paymentHash = body.paymentHash ?? ''
-  const hold = holdInvoices.get(paymentHash)
+  const hold = getPaymentByHash(paymentHash)
   if (!hold) {
     return c.json({ ok: false, error: 'Unknown payment hash' }, 400)
   }
 
-  const session = sessions.get(hold.sessionId)
+  const session = getStreamSessionById(hold.sessionId)
   if (!session) {
     return c.json({ ok: false, error: 'Session expired' }, 400)
   }
@@ -459,20 +579,13 @@ app.post('/invoices/claim', async (c) => {
       throw new Error(`Payment not confirmed: invoice status is ${paidResult.status}`)
     }
 
-    hold.settled = true
+    updatePaymentAsSettled(paymentHash)
     console.log(`[invoice/claim] SUCCESS: unlocking ${hold.grantedSeconds}s, totalPaid=${session.totalPaidSeconds + hold.grantedSeconds}s paymentHash=${paymentHash}`)
 
-    // Extend the session grant
     session.totalPaidSeconds += hold.grantedSeconds
     session.maxSegmentIndex = toSegmentIndex(session.totalPaidSeconds)
     session.expiresAt = Date.now() + authTtlSec * 1000
-
-    // Update the stream grant for this token
-    const grant = streamGrants.get(session.streamToken)
-    if (grant) {
-      grant.maxSegmentIndex = session.maxSegmentIndex
-      grant.expiresAt = session.expiresAt
-    }
+    updateStreamSession(session)
 
     return buildStreamPayload()
   })()
@@ -505,24 +618,18 @@ app.get('/stream/hls/:fileName', async (c) => {
     return c.text('Missing token', 401)
   }
 
-  const grant = streamGrants.get(token)
-  if (!grant || Date.now() > grant.expiresAt) {
+  const session = getStreamSessionByToken(token)
+  if (!session || Date.now() > session.expiresAt) {
     return c.text('Invalid or expired token', 401)
   }
 
   const segmentIndex = parseSegmentIndex(fileName)
-  if (segmentIndex !== null && segmentIndex > grant.maxSegmentIndex) {
+  if (segmentIndex !== null && segmentIndex > session.maxSegmentIndex) {
     return c.text('Segment not authorized', 403)
   }
 
   if (!fileName.endsWith('.m3u8') && !fileName.endsWith('.ts') && !fileName.endsWith('.key')) {
     return c.text('Unsupported media file', 400)
-  }
-
-  // Get session to find episode
-  const session = sessions.get(grant.sessionId)
-  if (!session) {
-    return c.text('Session not found', 401)
   }
 
   // Get episode to construct HLS path from storage_path
