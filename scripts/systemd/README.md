@@ -158,6 +158,18 @@ Log rotation is configured via logrotate:
 - Compresses old logs
 - Creates new logs with proper permissions
 
+## Database
+
+The backend uses SQLite with automatic migrations.
+
+- Database file: `backend/data/podcast.db`
+- Migrations run automatically on service startup
+- No manual database setup required
+
+The database directory is automatically created on first run. Ensure the service user has write permissions to:
+- `backend/data/` (SQLite database and WAL files)
+- `backend/uploads/` (audio file storage)
+
 ## Uninstallation
 
 To completely remove the service:
