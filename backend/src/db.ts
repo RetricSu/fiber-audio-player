@@ -52,7 +52,7 @@ class DatabaseManager {
         duration INTEGER,
         storage_path TEXT NOT NULL,
         price_per_second INTEGER NOT NULL,
-        status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'archived')),
+        status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'processing', 'ready', 'published', 'archived')),
         created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER) * 1000),
         FOREIGN KEY (podcast_id) REFERENCES podcasts(id) ON DELETE CASCADE
       );
