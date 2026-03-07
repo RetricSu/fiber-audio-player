@@ -10,7 +10,8 @@
     "build:app": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "typecheck:app": "tsc --noEmit"
+    "typecheck:app": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@fiber-pay/sdk": "0.1.0-rc.5",
@@ -24,7 +25,10 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.19.11",
+    "@types/supertest": "^7.2.0",
+    "supertest": "^7.2.2",
     "tsx": "^4.20.5",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vitest": "^4.0.18"
   }
 }
