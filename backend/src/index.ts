@@ -14,6 +14,8 @@ import {
   type Currency,
 } from '@fiber-pay/sdk'
 import { db } from './db.js'
+import { StorageService } from './storage.js'
+import { transcodeService } from './transcode.js'
 
 const app = new Hono()
 
@@ -109,6 +111,7 @@ function derivePaymentHash(preimageBytes: Uint8Array, algorithm: InvoiceHashAlgo
 }
 
 const segmentDurationSec = Number(process.env.HLS_SEGMENT_DURATION_SEC ?? 6)
+const DEFAULT_PRICE_PER_SECOND = BigInt(process.env.DEFAULT_PRICE_PER_SECOND ?? '10000')
 const authTtlSec = Number(process.env.STREAM_AUTH_TTL_SEC ?? 300)
 
 // Resolve media path relative to backend root so runtime CWD (systemd, pnpm, etc.)
@@ -727,7 +730,481 @@ app.delete('/admin/podcasts/:id', async (c) => {
   }
 })
 
+// ---------------------------------------------------------------------------
+// Admin API - Episode CRUD Operations
+// ---------------------------------------------------------------------------
+
+// POST /admin/episodes - Create episode metadata
+app.post('/admin/episodes', async (c) => {
+  const auth = requireAdminAuth(c)
+  if (!auth.ok) {
+    return c.json({ ok: false, error: auth.error }, 401)
+  }
+
+  const body = (await c.req.json().catch(() => ({}))) as {
+    podcast_id?: string
+    title?: string
+    description?: string
+    price_per_second?: string
+  }
+
+  // Validation
+  if (!body.podcast_id || body.podcast_id.trim() === '') {
+    return c.json({ ok: false, error: 'podcast_id is required' }, 400)
+  }
+
+  if (!body.title || body.title.trim() === '') {
+    return c.json({ ok: false, error: 'Title is required' }, 400)
+  }
+
+  if (body.title.length > 255) {
+    return c.json({ ok: false, error: 'Title must be 255 characters or less' }, 400)
+  }
+
+  try {
+    // Check if podcast exists
+    const podcast = db.prepare('SELECT id FROM podcasts WHERE id = ?').get(body.podcast_id) as { id: string } | undefined
+    if (!podcast) {
+      return c.json({ ok: false, error: 'Podcast not found' }, 404)
+    }
+
+    const id = randomUUID()
+    const now = Date.now()
+    const pricePerSecond = body.price_per_second ? BigInt(body.price_per_second) : DEFAULT_PRICE_PER_SECOND
+    const storagePath = '' // Will be set after upload
+
+    db.prepare(`
+      INSERT INTO episodes (id, podcast_id, title, description, duration, storage_path, price_per_second, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      body.podcast_id,
+      body.title.trim(),
+      body.description || null,
+      null, // duration
+      storagePath,
+      pricePerSecond,
+      'draft',
+      now
+    )
+
+    return c.json({
+      ok: true,
+      episode: {
+        id,
+        podcast_id: body.podcast_id,
+        title: body.title.trim(),
+        description: body.description || null,
+        duration: null,
+        storage_path: storagePath,
+        price_per_second: pricePerSecond.toString(),
+        status: 'draft',
+        created_at: now,
+      },
+    }, 201)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to create episode'
+    return c.json({ ok: false, error: message }, 500)
+  }
+})
+
+// POST /admin/episodes/:id/upload - Upload audio file
+app.post('/admin/episodes/:id/upload', async (c) => {
+  const auth = requireAdminAuth(c)
+  if (!auth.ok) {
+    return c.json({ ok: false, error: auth.error }, 401)
+  }
+
+  const id = c.req.param('id')
+
+  try {
+    // Check if episode exists
+    const episode = db.prepare(`
+      SELECT e.*, p.id as podcast_id 
+      FROM episodes e 
+      JOIN podcasts p ON e.podcast_id = p.id 
+      WHERE e.id = ?
+    `).get(id) as {
+      id: string
+      podcast_id: string
+      title: string
+      description: string | null
+      duration: number | null
+      storage_path: string
+      price_per_second: number
+      status: string
+      created_at: number
+    } | undefined
+
+    if (!episode) {
+      return c.json({ ok: false, error: 'Episode not found' }, 404)
+    }
+
+    // Only allow upload if episode is in draft or processing status
+    if (episode.status === 'published') {
+      return c.json({ ok: false, error: 'Cannot upload to a published episode' }, 400)
+    }
+
+    const formData = await c.req.formData()
+    const file = formData.get('file') as File | null
+
+    if (!file) {
+      return c.json({ ok: false, error: 'No file provided' }, 400)
+    }
+
+    // Convert File to stream
+    const fileBuffer = Buffer.from(await file.arrayBuffer())
+    const { Readable } = await import('node:stream')
+    const fileStream = Readable.from(fileBuffer)
+
+    // Upload file to storage
+    const result = await StorageService.upload(
+      episode.podcast_id,
+      fileStream,
+      file.type,
+      file.size,
+      file.name
+    )
+
+    // Update episode with storage path and status
+    const storagePath = result.filePath
+    db.prepare(`
+      UPDATE episodes 
+      SET storage_path = ?, status = ? 
+      WHERE id = ?
+    `).run(storagePath, 'processing', id)
+
+    // Queue transcoding job
+    await transcodeService.queueTranscodeJob(
+      episode.podcast_id,
+      id,
+      storagePath
+    )
+
+    return c.json({
+      ok: true,
+      episode: {
+        id,
+        podcast_id: episode.podcast_id,
+        title: episode.title,
+        description: episode.description,
+        duration: episode.duration,
+        storage_path: storagePath,
+        price_per_second: episode.price_per_second.toString(),
+        status: 'processing',
+        created_at: episode.created_at,
+      },
+      message: 'File uploaded and transcoding queued',
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to upload file'
+    return c.json({ ok: false, error: message }, 500)
+  }
+})
+
+// GET /admin/episodes - List episodes for a podcast
+app.get('/admin/episodes', async (c) => {
+  const auth = requireAdminAuth(c)
+  if (!auth.ok) {
+    return c.json({ ok: false, error: auth.error }, 401)
+  }
+
+  const podcastId = c.req.query('podcast_id')
+
+  if (!podcastId) {
+    return c.json({ ok: false, error: 'podcast_id query parameter is required' }, 400)
+  }
+
+  try {
+    // Check if podcast exists
+    const podcast = db.prepare('SELECT id FROM podcasts WHERE id = ?').get(podcastId) as { id: string } | undefined
+    if (!podcast) {
+      return c.json({ ok: false, error: 'Podcast not found' }, 404)
+    }
+
+    const episodes = db.prepare(`
+      SELECT id, podcast_id, title, description, duration, storage_path, price_per_second, status, created_at
+      FROM episodes
+      WHERE podcast_id = ?
+      ORDER BY created_at DESC
+    `).all(podcastId) as Array<{
+      id: string
+      podcast_id: string
+      title: string
+      description: string | null
+      duration: number | null
+      storage_path: string
+      price_per_second: number
+      status: string
+      created_at: number
+    }>
+
+    return c.json({
+      ok: true,
+      episodes: episodes.map(e => ({
+        ...e,
+        price_per_second: e.price_per_second.toString(),
+      })),
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to list episodes'
+    return c.json({ ok: false, error: message }, 500)
+  }
+})
+
+// GET /admin/episodes/:id - Get episode details
+app.get('/admin/episodes/:id', async (c) => {
+  const auth = requireAdminAuth(c)
+  if (!auth.ok) {
+    return c.json({ ok: false, error: auth.error }, 401)
+  }
+
+  const id = c.req.param('id')
+
+  try {
+    const episode = db.prepare(`
+      SELECT id, podcast_id, title, description, duration, storage_path, price_per_second, status, created_at
+      FROM episodes
+      WHERE id = ?
+    `).get(id) as {
+      id: string
+      podcast_id: string
+      title: string
+      description: string | null
+      duration: number | null
+      storage_path: string
+      price_per_second: number
+      status: string
+      created_at: number
+    } | undefined
+
+    if (!episode) {
+      return c.json({ ok: false, error: 'Episode not found' }, 404)
+    }
+
+    return c.json({
+      ok: true,
+      episode: {
+        ...episode,
+        price_per_second: episode.price_per_second.toString(),
+      },
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to get episode'
+    return c.json({ ok: false, error: message }, 500)
+  }
+})
+
+// PUT /admin/episodes/:id - Update episode metadata
+app.put('/admin/episodes/:id', async (c) => {
+  const auth = requireAdminAuth(c)
+  if (!auth.ok) {
+    return c.json({ ok: false, error: auth.error }, 401)
+  }
+
+  const id = c.req.param('id')
+  const body = (await c.req.json().catch(() => ({}))) as {
+    title?: string
+    description?: string
+    price_per_second?: string
+  }
+
+  // Validation
+  if (body.title !== undefined && body.title.trim() === '') {
+    return c.json({ ok: false, error: 'Title cannot be empty' }, 400)
+  }
+
+  if (body.title && body.title.length > 255) {
+    return c.json({ ok: false, error: 'Title must be 255 characters or less' }, 400)
+  }
+
+  try {
+    // Check if episode exists
+    const existing = db.prepare(`
+      SELECT id, status FROM episodes WHERE id = ?
+    `).get(id) as { id: string; status: string } | undefined
+
+    if (!existing) {
+      return c.json({ ok: false, error: 'Episode not found' }, 404)
+    }
+
+    // Do not allow editing published episodes
+    if (existing.status === 'published') {
+      return c.json({ ok: false, error: 'Cannot edit a published episode' }, 400)
+    }
+
+    // Build update query
+    const updates: string[] = []
+    const params: (string | number | null)[] = []
+
+    if (body.title !== undefined) {
+      updates.push('title = ?')
+      params.push(body.title.trim())
+    }
+
+    if (body.description !== undefined) {
+      updates.push('description = ?')
+      params.push(body.description || null)
+    }
+
+    if (body.price_per_second !== undefined) {
+      updates.push('price_per_second = ?')
+      params.push(BigInt(body.price_per_second).toString())
+    }
+
+    if (updates.length === 0) {
+      return c.json({ ok: false, error: 'No fields to update' }, 400)
+    }
+
+    params.push(id)
+
+    db.prepare(`
+      UPDATE episodes
+      SET ${updates.join(', ')}
+      WHERE id = ?
+    `).run(...params)
+
+    // Get updated episode
+    const episode = db.prepare(`
+      SELECT id, podcast_id, title, description, duration, storage_path, price_per_second, status, created_at
+      FROM episodes
+      WHERE id = ?
+    `).get(id) as {
+      id: string
+      podcast_id: string
+      title: string
+      description: string | null
+      duration: number | null
+      storage_path: string
+      price_per_second: number
+      status: string
+      created_at: number
+    }
+
+    return c.json({
+      ok: true,
+      episode: {
+        ...episode,
+        price_per_second: episode.price_per_second.toString(),
+      },
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to update episode'
+    return c.json({ ok: false, error: message }, 500)
+  }
+})
+
+// DELETE /admin/episodes/:id - Delete episode and files
+app.delete('/admin/episodes/:id', async (c) => {
+  const auth = requireAdminAuth(c)
+  if (!auth.ok) {
+    return c.json({ ok: false, error: auth.error }, 401)
+  }
+
+  const id = c.req.param('id')
+
+  try {
+    // Check if episode exists
+    const existing = db.prepare(`
+      SELECT id, podcast_id, storage_path FROM episodes WHERE id = ?
+    `).get(id) as { id: string; podcast_id: string; storage_path: string } | undefined
+
+    if (!existing) {
+      return c.json({ ok: false, error: 'Episode not found' }, 404)
+    }
+
+    // Delete files from storage if storage_path is set
+    if (existing.storage_path) {
+      try {
+        await StorageService.deleteEpisode(existing.podcast_id, id)
+      } catch (storageErr) {
+        // Log but continue - file may not exist
+        console.error('Failed to delete episode files:', storageErr)
+      }
+    }
+
+    // Delete episode from database
+    db.prepare('DELETE FROM episodes WHERE id = ?').run(id)
+
+    return c.json({
+      ok: true,
+      message: 'Episode and associated files deleted successfully',
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to delete episode'
+    return c.json({ ok: false, error: message }, 500)
+  }
+})
+
+// POST /admin/episodes/:id/publish - Publish episode
+app.post('/admin/episodes/:id/publish', async (c) => {
+  const auth = requireAdminAuth(c)
+  if (!auth.ok) {
+    return c.json({ ok: false, error: auth.error }, 401)
+  }
+
+  const id = c.req.param('id')
+
+  try {
+    // Check if episode exists
+    const existing = db.prepare(`
+      SELECT id, status, storage_path FROM episodes WHERE id = ?
+    `).get(id) as { id: string; status: string; storage_path: string } | undefined
+
+    if (!existing) {
+      return c.json({ ok: false, error: 'Episode not found' }, 404)
+    }
+
+    // Only allow publishing if episode is in 'ready' status
+    if (existing.status !== 'ready') {
+      return c.json({ ok: false, error: `Cannot publish episode with status: ${existing.status}. Episode must be in 'ready' status.` }, 400)
+    }
+
+    if (!existing.storage_path) {
+      return c.json({ ok: false, error: 'Episode has no uploaded file' }, 400)
+    }
+
+    // Update status to published
+    db.prepare(`
+      UPDATE episodes
+      SET status = 'published'
+      WHERE id = ?
+    `).run(id)
+
+    // Get updated episode
+    const episode = db.prepare(`
+      SELECT id, podcast_id, title, description, duration, storage_path, price_per_second, status, created_at
+      FROM episodes
+      WHERE id = ?
+    `).get(id) as {
+      id: string
+      podcast_id: string
+      title: string
+      description: string | null
+      duration: number | null
+      storage_path: string
+      price_per_second: number
+      status: string
+      created_at: number
+    }
+
+    return c.json({
+      ok: true,
+      episode: {
+        ...episode,
+        price_per_second: episode.price_per_second.toString(),
+      },
+      message: 'Episode published successfully',
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to publish episode'
+    return c.json({ ok: false, error: message }, 500)
+  }
+})
+
 const port = Number(process.env.PORT ?? 8787)
+
+transcodeService.initializeTranscodeQueue()
 
 serve(
   {
