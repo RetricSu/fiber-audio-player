@@ -40,6 +40,10 @@ The backend serves HLS segments and playlists. Before deploying, make sure you h
 ## Additional notes
 
 - The backend listens on port `8787` by default; you may change this via the `PORT` environment variable.
-- Always build (`pnpm build:api`) before running in production.
+- Always build the project before running in production. The `build:api` script lives at the **root** of the repository, so run it from the top level:
+  ```bash
+  pnpm build:api
+  ```
+
 
 With this README in place, operations teams have quick links to the detailed guides for both management methods and HLS preparation.
