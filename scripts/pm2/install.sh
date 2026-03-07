@@ -8,11 +8,10 @@ command -v pnpm >/dev/null 2>&1 || { echo "pnpm not found"; exit 1; }
 command -v pm2 >/dev/null 2>&1 || { echo "pm2 not found; install with npm install -g pm2"; exit 1; }
 
 ROOT=$(pwd)
-cd "$ROOT/backend"
+cd "$ROOT"
 pnpm install
 pnpm build:api
 
-cd "$ROOT"
 pm2 start ./scripts/pm2/ecosystem.config.js
 pm2 save
 pm2 startup -u $(whoami) --hp "$HOME" >/dev/null
