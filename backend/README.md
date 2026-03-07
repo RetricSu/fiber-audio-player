@@ -37,6 +37,26 @@ The backend serves HLS segments and playlists. Before deploying, make sure you h
 
 - See [docs/prepare-hls](../docs/hls-manual-setup.md) for step-by-step guidance on generating and hosting the `media/hls` playlist and segments.
 
+## Testing
+
+Run the test suite:
+
+```bash
+# Run all tests
+npx vitest run
+
+# Run tests in watch mode (development)
+npx vitest
+```
+
+**Note:** Use `npx vitest run` instead of `bun test` due to native module ABI compatibility. The test suite includes 38+ tests covering:
+- Health check endpoint
+- Podcast CRUD operations  
+- Episode management and uploads
+- Payment flow integration
+
+Tests automatically set up a test database and clean up after each test.
+
 ## Additional notes
 
 - The backend listens on port `8787` by default; you may change this via the `PORT` environment variable.
