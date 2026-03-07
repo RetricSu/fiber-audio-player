@@ -17,7 +17,7 @@ This folder contains the source code for the backend API, built with Hono and co
    pnpm dev
    ```
 
-   (or `pnpm build:api && node dist/index.js` for a one-off run)
+   (or `pnpm build && node dist/index.js` for a one-off run)
 
 ## Operational modes
 
@@ -44,6 +44,5 @@ The backend serves HLS segments and playlists. Before deploying, make sure you h
   ```bash
   pnpm build:api
   ```
-
 
 With this README in place, operations teams have quick links to the detailed guides for both management methods and HLS preparation.
