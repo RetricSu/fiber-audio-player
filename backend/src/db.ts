@@ -123,14 +123,53 @@ class DatabaseManager {
   }
 }
 
-// Export singleton instance getter
-export const db = DatabaseManager.getInstance();
+// Track initialization state
+let isInitialized = false;
+
+/**
+ * Initialize the database. Must be called before using getDb().
+ * This function is idempotent - calling it multiple times is safe.
+ */
+export function initialize(): Database {
+  if (!isInitialized) {
+    DatabaseManager.getInstance();
+    isInitialized = true;
+  }
+  return DatabaseManager.getInstance();
+}
+
+/**
+ * Get the initialized database instance.
+ * Throws if initialize() has not been called first.
+ */
+export function getDb(): Database {
+  if (!isInitialized) {
+    throw new Error(
+      "Database not initialized. Call initialize() before using getDb()."
+    );
+  }
+  return DatabaseManager.getInstance();
+}
+
+/**
+ * Check if the database has been initialized.
+ */
+export function isDbInitialized(): boolean {
+  return isInitialized;
+}
+
 export const healthCheck = DatabaseManager.healthCheck;
 export const closeDb = DatabaseManager.close;
 
-import { runMigrations } from "./migrations.js";
-runMigrations().catch((err) => {
-  console.error("[db] Migration failed:", err);
-});
+export async function initDb(): Promise<void> {
+  // Initialize the database first
+  initialize();
+  // Then run migrations
+  const { runMigrations } = await import("./migrations.js");
+  await runMigrations();
+}
 
-export default db;
+// For backward compatibility during transition - deprecated
+export const db = DatabaseManager.getInstance();
+
+export default getDb;

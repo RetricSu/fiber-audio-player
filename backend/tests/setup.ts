@@ -1,5 +1,5 @@
 import { beforeAll, afterAll, beforeEach } from 'vitest'
-import { closeDb, db } from '../src/db.js'
+import { closeDb, getDb, initDb } from '../src/db.js'
 import { StorageService } from '../src/storage.js'
 import { randomUUID } from 'node:crypto'
 import * as fs from 'node:fs/promises'
@@ -22,16 +22,16 @@ process.env.ADMIN_API_KEY = TEST_ADMIN_KEY
 process.env.UPLOADS_DIR = TEST_UPLOADS_DIR
 
 beforeAll(async () => {
-  // Ensure test uploads directory exists
+  await initDb()
   await fs.mkdir(TEST_UPLOADS_DIR, { recursive: true })
 })
 
 beforeEach(async () => {
   // Clean up database tables before each test
-  db.prepare('DELETE FROM payments').run()
-  db.prepare('DELETE FROM stream_sessions').run()
-  db.prepare('DELETE FROM episodes').run()
-  db.prepare('DELETE FROM podcasts').run()
+  getDb().prepare('DELETE FROM payments').run()
+  getDb().prepare('DELETE FROM stream_sessions').run()
+  getDb().prepare('DELETE FROM episodes').run()
+  getDb().prepare('DELETE FROM podcasts').run()
   
   // Clean up test uploads
   try {
@@ -65,7 +65,7 @@ export async function createTestPodcast(title: string, description?: string) {
   const id = randomUUID()
   const now = Date.now()
   
-  db.prepare(`
+  getDb().prepare(`
     INSERT INTO podcasts (id, title, description, created_at)
     VALUES (?, ?, ?, ?)
   `).run(id, title, description ?? null, now)
@@ -90,7 +90,7 @@ export async function createTestEpisode(
   const status = options.status ?? 'published'
   const storagePath = options.storagePath ?? `uploads/${podcastId}/${id}/source.mp3`
   
-  db.prepare(`
+  getDb().prepare(`
     INSERT INTO episodes (id, podcast_id, title, description, duration, storage_path, price_per_second, status, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(

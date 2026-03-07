@@ -13,7 +13,7 @@ import {
   toHex,
   type Currency,
 } from '@fiber-pay/sdk'
-import { db } from './db.js'
+import { getDb, initDb } from './db.js'
 import { StorageService } from './storage.js'
 import { transcodeService } from './transcode.js'
 import {
@@ -129,7 +129,7 @@ const claimInFlight = new Map<string, Promise<ClaimSuccessPayload>>()
 
 // Database helper functions for stream_sessions
 function insertStreamSession(session: StreamSession): void {
-  db.prepare(`
+  getDb().prepare(`
     INSERT INTO stream_sessions (id, episode_id, stream_token, total_paid_seconds, max_segment_index, expires_at, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(
@@ -144,7 +144,7 @@ function insertStreamSession(session: StreamSession): void {
 }
 
 function getStreamSessionById(sessionId: string): StreamSession | undefined {
-  const row = db.prepare('SELECT * FROM stream_sessions WHERE id = ?').get(sessionId) as {
+  const row = getDb().prepare('SELECT * FROM stream_sessions WHERE id = ?').get(sessionId) as {
     id: string
     episode_id: string
     stream_token: string
@@ -168,7 +168,7 @@ function getStreamSessionById(sessionId: string): StreamSession | undefined {
 }
 
 function getStreamSessionByToken(streamToken: string): StreamSession | undefined {
-  const row = db.prepare('SELECT * FROM stream_sessions WHERE stream_token = ?').get(streamToken) as {
+  const row = getDb().prepare('SELECT * FROM stream_sessions WHERE stream_token = ?').get(streamToken) as {
     id: string
     episode_id: string
     stream_token: string
@@ -192,7 +192,7 @@ function getStreamSessionByToken(streamToken: string): StreamSession | undefined
 }
 
 function updateStreamSession(session: StreamSession): void {
-  db.prepare(`
+  getDb().prepare(`
     UPDATE stream_sessions 
     SET total_paid_seconds = ?, max_segment_index = ?, expires_at = ?
     WHERE id = ?
@@ -206,7 +206,7 @@ function updateStreamSession(session: StreamSession): void {
 
 // Database helper functions for payments
 function insertPayment(payment: HoldInvoice): void {
-  db.prepare(`
+  getDb().prepare(`
     INSERT INTO payments (id, session_id, payment_hash, preimage, amount_shannon, granted_seconds, status, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
@@ -222,7 +222,7 @@ function insertPayment(payment: HoldInvoice): void {
 }
 
 function getPaymentByHash(paymentHash: string): HoldInvoice | undefined {
-  const row = db.prepare('SELECT * FROM payments WHERE payment_hash = ?').get(paymentHash) as {
+  const row = getDb().prepare('SELECT * FROM payments WHERE payment_hash = ?').get(paymentHash) as {
     id: string
     session_id: string
     payment_hash: string
@@ -249,7 +249,7 @@ function getPaymentByHash(paymentHash: string): HoldInvoice | undefined {
 }
 
 function updatePaymentAsSettled(paymentHash: string): void {
-  db.prepare(`
+  getDb().prepare(`
     UPDATE payments 
     SET status = ?, settled_at = ?, preimage = preimage
     WHERE payment_hash = ?
@@ -368,7 +368,7 @@ app.post('/sessions/create', async (c) => {
   const { episodeId } = validation.data
 
   try {
-    const episode = db.prepare(`
+    const episode = getDb().prepare(`
       SELECT id, price_per_second, status
       FROM episodes
       WHERE id = ?
@@ -434,7 +434,7 @@ app.post('/invoices/create', async (c) => {
   }
 
   // Get episode to use its price_per_second
-  const episode = db.prepare(`
+  const episode = getDb().prepare(`
     SELECT price_per_second
     FROM episodes
     WHERE id = ?
@@ -666,7 +666,7 @@ app.get('/stream/hls/:fileName', async (c) => {
   }
 
   // Get episode to construct HLS path from storage_path
-  const episode = db.prepare(`
+  const episode = getDb().prepare(`
     SELECT storage_path
     FROM episodes
     WHERE id = ?
@@ -718,7 +718,7 @@ function constructHlsUrl(storagePath: string): string | null {
 // GET /api/podcasts - List all published podcasts
 app.get('/api/podcasts', async (c) => {
   try {
-    const podcasts = db.prepare(`
+    const podcasts = getDb().prepare(`
       SELECT id, title, description, created_at
       FROM podcasts
       ORDER BY created_at DESC
@@ -746,12 +746,12 @@ app.get('/api/podcasts/:id/episodes', async (c) => {
 
   try {
     // Check if podcast exists
-    const podcast = db.prepare('SELECT id FROM podcasts WHERE id = ?').get(podcastId) as { id: string } | undefined
+    const podcast = getDb().prepare('SELECT id FROM podcasts WHERE id = ?').get(podcastId) as { id: string } | undefined
     if (!podcast) {
       return c.json({ ok: false, error: 'Podcast not found' }, 404)
     }
 
-    const episodes = db.prepare(`
+    const episodes = getDb().prepare(`
       SELECT id, podcast_id, title, description, duration, price_per_second, status, created_at, storage_path
       FROM episodes
       WHERE podcast_id = ? AND status = 'published'
@@ -799,7 +799,7 @@ app.get('/api/episodes/:id', async (c) => {
   const episodeId = c.req.param('id')
 
   try {
-    const episode = db.prepare(`
+    const episode = getDb().prepare(`
       SELECT id, podcast_id, title, description, duration, price_per_second, status, created_at, storage_path
       FROM episodes
       WHERE id = ? AND status = 'published'
@@ -882,7 +882,7 @@ app.post('/admin/podcasts', async (c) => {
   const now = Date.now()
 
   try {
-    db.prepare(`
+    getDb().prepare(`
       INSERT INTO podcasts (id, title, description, created_at)
       VALUES (?, ?, ?, ?)
     `).run(id, title, description ?? null, now)
@@ -910,7 +910,7 @@ app.get('/admin/podcasts', async (c) => {
   }
 
   try {
-    const podcasts = db.prepare(`
+    const podcasts = getDb().prepare(`
       SELECT id, title, description, created_at
       FROM podcasts
       ORDER BY created_at DESC
@@ -941,7 +941,7 @@ app.get('/admin/podcasts/:id', async (c) => {
   const id = c.req.param('id')
 
   try {
-    const podcast = db.prepare(`
+    const podcast = getDb().prepare(`
       SELECT id, title, description, created_at
       FROM podcasts
       WHERE id = ?
@@ -989,7 +989,7 @@ app.put('/admin/podcasts/:id', async (c) => {
 
   try {
     // Check if podcast exists
-    const existing = db.prepare('SELECT id FROM podcasts WHERE id = ?').get(id) as { id: string } | undefined
+    const existing = getDb().prepare('SELECT id FROM podcasts WHERE id = ?').get(id) as { id: string } | undefined
     if (!existing) {
       return c.json({ ok: false, error: 'Podcast not found' }, 404)
     }
@@ -1010,14 +1010,14 @@ app.put('/admin/podcasts/:id', async (c) => {
 
     params.push(id)
 
-    db.prepare(`
+    getDb().prepare(`
       UPDATE podcasts
       SET ${updates.join(', ')}
       WHERE id = ?
     `).run(...params)
 
     // Get updated podcast
-    const podcast = db.prepare(`
+    const podcast = getDb().prepare(`
       SELECT id, title, description, created_at
       FROM podcasts
       WHERE id = ?
@@ -1049,13 +1049,13 @@ app.delete('/admin/podcasts/:id', async (c) => {
 
   try {
     // Check if podcast exists
-    const existing = db.prepare('SELECT id FROM podcasts WHERE id = ?').get(id) as { id: string } | undefined
+    const existing = getDb().prepare('SELECT id FROM podcasts WHERE id = ?').get(id) as { id: string } | undefined
     if (!existing) {
       return c.json({ ok: false, error: 'Podcast not found' }, 404)
     }
 
     // Delete will cascade to episodes due to ON DELETE CASCADE
-    db.prepare('DELETE FROM podcasts WHERE id = ?').run(id)
+    getDb().prepare('DELETE FROM podcasts WHERE id = ?').run(id)
 
     return c.json({
       ok: true,
@@ -1087,7 +1087,7 @@ app.post('/admin/episodes', async (c) => {
 
   try {
     // Check if podcast exists
-    const podcast = db.prepare('SELECT id FROM podcasts WHERE id = ?').get(podcast_id) as { id: string } | undefined
+    const podcast = getDb().prepare('SELECT id FROM podcasts WHERE id = ?').get(podcast_id) as { id: string } | undefined
     if (!podcast) {
       return c.json({ ok: false, error: 'Podcast not found' }, 404)
     }
@@ -1097,7 +1097,7 @@ app.post('/admin/episodes', async (c) => {
     const pricePerSecond = price_per_second ? BigInt(price_per_second) : DEFAULT_PRICE_PER_SECOND
     const storagePath = '' // Will be set after upload
 
-    db.prepare(`
+    getDb().prepare(`
       INSERT INTO episodes (id, podcast_id, title, description, duration, storage_path, price_per_second, status, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
@@ -1143,7 +1143,7 @@ app.post('/admin/episodes/:id/upload', async (c) => {
 
   try {
     // Check if episode exists
-    const episode = db.prepare(`
+    const episode = getDb().prepare(`
       SELECT e.*, p.id as podcast_id 
       FROM episodes e 
       JOIN podcasts p ON e.podcast_id = p.id 
@@ -1196,7 +1196,7 @@ app.post('/admin/episodes/:id/upload', async (c) => {
 
     // Update episode with storage path and status
     const storagePath = result.filePath
-    db.prepare(`
+    getDb().prepare(`
       UPDATE episodes 
       SET storage_path = ?, status = ? 
       WHERE id = ?
@@ -1245,12 +1245,12 @@ app.get('/admin/episodes', async (c) => {
 
   try {
     // Check if podcast exists
-    const podcast = db.prepare('SELECT id FROM podcasts WHERE id = ?').get(podcastId) as { id: string } | undefined
+    const podcast = getDb().prepare('SELECT id FROM podcasts WHERE id = ?').get(podcastId) as { id: string } | undefined
     if (!podcast) {
       return c.json({ ok: false, error: 'Podcast not found' }, 404)
     }
 
-    const episodes = db.prepare(`
+    const episodes = getDb().prepare(`
       SELECT id, podcast_id, title, description, duration, storage_path, price_per_second, status, created_at
       FROM episodes
       WHERE podcast_id = ?
@@ -1290,7 +1290,7 @@ app.get('/admin/episodes/:id', async (c) => {
   const id = c.req.param('id')
 
   try {
-    const episode = db.prepare(`
+    const episode = getDb().prepare(`
       SELECT id, podcast_id, title, description, duration, storage_path, price_per_second, status, created_at
       FROM episodes
       WHERE id = ?
@@ -1346,7 +1346,7 @@ app.put('/admin/episodes/:id', async (c) => {
 
   try {
     // Check if episode exists
-    const existing = db.prepare(`
+    const existing = getDb().prepare(`
       SELECT id, status FROM episodes WHERE id = ?
     `).get(id) as { id: string; status: string } | undefined
 
@@ -1380,14 +1380,14 @@ app.put('/admin/episodes/:id', async (c) => {
 
     params.push(id)
 
-    db.prepare(`
+    getDb().prepare(`
       UPDATE episodes
       SET ${updates.join(', ')}
       WHERE id = ?
     `).run(...params)
 
     // Get updated episode
-    const episode = db.prepare(`
+    const episode = getDb().prepare(`
       SELECT id, podcast_id, title, description, duration, storage_path, price_per_second, status, created_at
       FROM episodes
       WHERE id = ?
@@ -1427,7 +1427,7 @@ app.delete('/admin/episodes/:id', async (c) => {
 
   try {
     // Check if episode exists
-    const existing = db.prepare(`
+    const existing = getDb().prepare(`
       SELECT id, podcast_id, storage_path FROM episodes WHERE id = ?
     `).get(id) as { id: string; podcast_id: string; storage_path: string } | undefined
 
@@ -1446,7 +1446,7 @@ app.delete('/admin/episodes/:id', async (c) => {
     }
 
     // Delete episode from database
-    db.prepare('DELETE FROM episodes WHERE id = ?').run(id)
+    getDb().prepare('DELETE FROM episodes WHERE id = ?').run(id)
 
     return c.json({
       ok: true,
@@ -1469,7 +1469,7 @@ app.post('/admin/episodes/:id/publish', async (c) => {
 
   try {
     // Check if episode exists
-    const existing = db.prepare(`
+    const existing = getDb().prepare(`
       SELECT id, status, storage_path FROM episodes WHERE id = ?
     `).get(id) as { id: string; status: string; storage_path: string } | undefined
 
@@ -1487,14 +1487,14 @@ app.post('/admin/episodes/:id/publish', async (c) => {
     }
 
     // Update status to published
-    db.prepare(`
+    getDb().prepare(`
       UPDATE episodes
       SET status = 'published'
       WHERE id = ?
     `).run(id)
 
     // Get updated episode
-    const episode = db.prepare(`
+    const episode = getDb().prepare(`
       SELECT id, podcast_id, title, description, duration, storage_path, price_per_second, status, created_at
       FROM episodes
       WHERE id = ?
@@ -1526,16 +1526,21 @@ app.post('/admin/episodes/:id/publish', async (c) => {
 
 const port = Number(process.env.PORT ?? 8787)
 
-transcodeService.initializeTranscodeQueue()
+async function startServer() {
+  await initDb()
+  transcodeService.initializeTranscodeQueue()
 
-serve(
-  {
-    fetch: app.fetch,
-    port,
-  },
-  (info) => {
-    console.log(`backend listening on http://localhost:${info.port}`)
-  }
-)
+  serve(
+    {
+      fetch: app.fetch,
+      port,
+    },
+    (info) => {
+      console.log(`backend listening on http://localhost:${info.port}`)
+    }
+  )
+}
+
+startServer()
 
 export { app }

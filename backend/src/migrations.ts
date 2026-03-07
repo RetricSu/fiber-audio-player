@@ -1,4 +1,4 @@
-import { db } from "./db.js";
+import { getDb } from "./db.js";
 import { readdir, readFile } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -11,7 +11,7 @@ const MIGRATIONS_DIR = path.join(__dirname, "..", "migrations");
 export async function runMigrations(): Promise<void> {
   console.log("[migration] Starting migration runner...");
 
-  db.exec(`
+  getDb().exec(`
     CREATE TABLE IF NOT EXISTS migrations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL UNIQUE,
@@ -19,7 +19,7 @@ export async function runMigrations(): Promise<void> {
     );
   `);
 
-  const appliedRows = db.prepare("SELECT name FROM migrations").all() as {
+  const appliedRows = getDb().prepare("SELECT name FROM migrations").all() as {
     name: string;
   }[];
   const appliedSet = new Set(appliedRows.map((m) => m.name));
@@ -61,9 +61,9 @@ export async function runMigrations(): Promise<void> {
     const filePath = path.join(MIGRATIONS_DIR, file);
     const sql = await readFile(filePath, "utf-8");
 
-    const runTransaction = db.transaction(() => {
-      db.exec(sql);
-      db.prepare("INSERT INTO migrations (name) VALUES (?)").run(file);
+    const runTransaction = getDb().transaction(() => {
+      getDb().exec(sql);
+      getDb().prepare("INSERT INTO migrations (name) VALUES (?)").run(file);
     });
 
     try {
@@ -87,7 +87,7 @@ export function getMigrationStatus(): {
   applied: string[];
   pending: string[];
 } {
-  db.exec(`
+  getDb().exec(`
     CREATE TABLE IF NOT EXISTS migrations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL UNIQUE,
@@ -95,7 +95,7 @@ export function getMigrationStatus(): {
     );
   `);
 
-  const appliedRows = db.prepare("SELECT name FROM migrations").all() as {
+  const appliedRows = getDb().prepare("SELECT name FROM migrations").all() as {
     name: string;
   }[];
   const applied = appliedRows.map((m) => m.name);
