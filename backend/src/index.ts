@@ -669,6 +669,147 @@ app.get('/stream/hls/:fileName', async (c) => {
 })
 
 // ---------------------------------------------------------------------------
+// Public API - Browse podcasts and episodes (no authentication required)
+// ---------------------------------------------------------------------------
+
+// Helper function to construct HLS URL from storage_path
+function constructHlsUrl(storagePath: string): string | null {
+  // From storage_path like: uploads/{podcast_id}/{episode_id}/source.mp3
+  // Extract podcast_id and episode_id from the path
+  const match = storagePath.match(/uploads\/([^/]+)\/([^/]+)/)
+  if (!match) return null
+  const [, podcastId, episodeId] = match
+  return `/stream/${podcastId}/${episodeId}/hls/playlist.m3u8`
+}
+
+// GET /api/podcasts - List all published podcasts
+app.get('/api/podcasts', async (c) => {
+  try {
+    const podcasts = db.prepare(`
+      SELECT id, title, description, created_at
+      FROM podcasts
+      ORDER BY created_at DESC
+    `).all() as Array<{
+      id: string
+      title: string
+      description: string | null
+      created_at: number
+    }>
+
+    c.header('Cache-Control', 'public, max-age=300') // 5 minutes
+    return c.json({
+      ok: true,
+      podcasts,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to list podcasts'
+    return c.json({ ok: false, error: message }, 500)
+  }
+})
+
+// GET /api/podcasts/:id/episodes - List published episodes for a podcast
+app.get('/api/podcasts/:id/episodes', async (c) => {
+  const podcastId = c.req.param('id')
+
+  try {
+    // Check if podcast exists
+    const podcast = db.prepare('SELECT id FROM podcasts WHERE id = ?').get(podcastId) as { id: string } | undefined
+    if (!podcast) {
+      return c.json({ ok: false, error: 'Podcast not found' }, 404)
+    }
+
+    const episodes = db.prepare(`
+      SELECT id, podcast_id, title, description, duration, price_per_second, status, created_at, storage_path
+      FROM episodes
+      WHERE podcast_id = ? AND status = 'published'
+      ORDER BY created_at DESC
+    `).all(podcastId) as Array<{
+      id: string
+      podcast_id: string
+      title: string
+      description: string | null
+      duration: number | null
+      price_per_second: number
+      status: string
+      created_at: number
+      storage_path: string
+    }>
+
+    const episodesWithHlsUrl = episodes.map(episode => {
+      const hlsUrl = constructHlsUrl(episode.storage_path)
+      return {
+        id: episode.id,
+        podcast_id: episode.podcast_id,
+        title: episode.title,
+        description: episode.description,
+        duration: episode.duration,
+        price_per_second: episode.price_per_second.toString(),
+        status: episode.status,
+        hls_url: hlsUrl,
+        created_at: episode.created_at,
+      }
+    })
+
+    c.header('Cache-Control', 'public, max-age=300') // 5 minutes
+    return c.json({
+      ok: true,
+      episodes: episodesWithHlsUrl,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to list episodes'
+    return c.json({ ok: false, error: message }, 500)
+  }
+})
+
+// GET /api/episodes/:id - Get episode details
+app.get('/api/episodes/:id', async (c) => {
+  const episodeId = c.req.param('id')
+
+  try {
+    const episode = db.prepare(`
+      SELECT id, podcast_id, title, description, duration, price_per_second, status, created_at, storage_path
+      FROM episodes
+      WHERE id = ? AND status = 'published'
+    `).get(episodeId) as {
+      id: string
+      podcast_id: string
+      title: string
+      description: string | null
+      duration: number | null
+      price_per_second: number
+      status: string
+      created_at: number
+      storage_path: string
+    } | undefined
+
+    if (!episode) {
+      return c.json({ ok: false, error: 'Episode not found' }, 404)
+    }
+
+    const hlsUrl = constructHlsUrl(episode.storage_path)
+
+    c.header('Cache-Control', 'public, max-age=60') // 1 minute
+    return c.json({
+      ok: true,
+      episode: {
+        id: episode.id,
+        podcast_id: episode.podcast_id,
+        title: episode.title,
+        description: episode.description,
+        duration: episode.duration,
+        price_per_second: episode.price_per_second.toString(),
+        status: episode.status,
+        hls_url: hlsUrl,
+        created_at: episode.created_at,
+      },
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to get episode'
+    return c.json({ ok: false, error: message }, 500)
+  }
+})
+
+// ---------------------------------------------------------------------------
 // Admin API - Podcast CRUD Operations
 // ---------------------------------------------------------------------------
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || ''
