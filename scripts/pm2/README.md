@@ -12,6 +12,41 @@ PM2 is a popular Node.js process manager that can keep the backend running, rest
 - PM2 globally installed (`npm install -g pm2`)
 - Fiber Audio Player project cloned to the server
 
+## Environment Variables
+
+Create a `.env` file in the `backend/` directory with these variables:
+
+**Required:**
+- `ADMIN_API_KEY` - Secret key for admin API access (generate a strong random string)
+- `FIBER_RPC_URL` - URL to your Fiber node RPC (default: http://127.0.0.1:8227)
+
+**Optional:**
+- `PORT` - Server port (default: 8787)
+- `PRICE_PER_SECOND_SHANNON` - Default price per second in Shannon (default: 10000)
+- `INVOICE_CURRENCY` - Invoice currency (default: Fibd)
+- `INVOICE_EXPIRY_SEC` - Invoice expiry time in seconds (default: 600)
+- `UPLOADS_DIR` - Directory for audio file uploads (default: ./uploads)
+
+Example `.env` file:
+```
+ADMIN_API_KEY=your-secret-admin-key-here
+FIBER_RPC_URL=http://127.0.0.1:8227
+PORT=8787
+```
+
+## Database Migrations
+
+The backend uses SQLite with automatic migrations. On first startup:
+
+1. Database file is created at `backend/data/podcast.db`
+2. Schema migrations run automatically
+3. No manual migration steps required
+
+The database persists across restarts and contains:
+- Podcasts and episodes metadata
+- Payment sessions and invoices
+- Stream grants
+
 ## Quick Start
 
 ### Installation
@@ -71,6 +106,25 @@ Edit `ecosystem.config.js` to change environment variables, port, or other PM2 o
 This will stop and delete the PM2 process and remove the startup configuration.
 
 ## Troubleshooting
+
+### Service fails to start
+
+1. Check if ADMIN_API_KEY is set in backend/.env
+2. Verify Fiber node is accessible at FIBER_RPC_URL
+3. Check PM2 logs: `pm2 logs fiber-audio-backend --lines 100`
+4. Ensure port 8787 is not in use: `ss -tlnp | grep 8787`
+
+### Database permission errors
+
+Ensure PM2 has write access to:
+- `backend/data/` directory (for SQLite database)
+- `backend/uploads/` directory (for audio file storage)
+
+### Port already in use
+
+Change the port in ecosystem.config.js or set PORT environment variable.
+
+### General debugging
 
 Check PM2 logs:
 

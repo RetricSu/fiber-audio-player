@@ -18,7 +18,9 @@ module.exports = {
         NODE_ENV: "production",
         PORT: 8787,
       },
-      // add additional environment vars here
+      // Load environment variables from .env file
+      // Make sure to create backend/.env with required variables
+      env_file: "./backend/.env",
     },
   ],
 };
