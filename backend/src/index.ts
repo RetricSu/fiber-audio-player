@@ -73,6 +73,7 @@ type ClaimSuccessPayload = {
 
 type StreamSession = {
   id: string
+  episodeId: string
   streamToken: string
   totalPaidSeconds: number
   maxSegmentIndex: number
@@ -192,39 +193,76 @@ app.get('/node-info', async (c) => {
 
 // ---------------------------------------------------------------------------
 // POST /sessions/create — start a new streaming session.
+// Body: { episodeId: string }
 // Returns a sessionId and the initial (empty) stream token.
 // ---------------------------------------------------------------------------
 app.post('/sessions/create', async (c) => {
-  const sessionId = randomUUID()
-  const streamToken = randomUUID()
-  const expiresAt = Date.now() + authTtlSec * 1000
-
-  const session: StreamSession = {
-    id: sessionId,
-    streamToken,
-    totalPaidSeconds: 0,
-    maxSegmentIndex: -1, // no segments unlocked yet
-    expiresAt,
-    createdAt: Date.now(),
+  const body = (await c.req.json().catch(() => ({}))) as {
+    episodeId?: string
   }
-  sessions.set(sessionId, session)
 
-  // Also create the grant entry so the token can be validated (but 0 segments)
-  streamGrants.set(streamToken, {
-    token: streamToken,
-    expiresAt,
-    maxSegmentIndex: -1,
-    sessionId,
-  })
+  const episodeId = body.episodeId ?? ''
 
-  return c.json({
-    ok: true,
-    session: {
+  // Validate episode exists and is published
+  if (!episodeId) {
+    return c.json({ ok: false, error: 'episodeId is required' }, 400)
+  }
+
+  try {
+    const episode = db.prepare(`
+      SELECT id, price_per_second, status
+      FROM episodes
+      WHERE id = ?
+    `).get(episodeId) as {
+      id: string
+      price_per_second: number
+      status: string
+    } | undefined
+
+    if (!episode) {
+      return c.json({ ok: false, error: 'Episode not found' }, 404)
+    }
+
+    if (episode.status !== 'published') {
+      return c.json({ ok: false, error: `Episode is not published (status: ${episode.status})` }, 400)
+    }
+
+    const sessionId = randomUUID()
+    const streamToken = randomUUID()
+    const expiresAt = Date.now() + authTtlSec * 1000
+
+    const session: StreamSession = {
+      id: sessionId,
+      episodeId,
+      streamToken,
+      totalPaidSeconds: 0,
+      maxSegmentIndex: -1, // no segments unlocked yet
+      expiresAt,
+      createdAt: Date.now(),
+    }
+    sessions.set(sessionId, session)
+
+    // Also create the grant entry so the token can be validated (but 0 segments)
+    streamGrants.set(streamToken, {
+      token: streamToken,
+      expiresAt,
+      maxSegmentIndex: -1,
       sessionId,
-      pricePerSecondShannon: toHex(PRICE_PER_SECOND_SHANNON),
-      segmentDurationSec,
-    },
-  })
+    })
+
+    return c.json({
+      ok: true,
+      session: {
+        sessionId,
+        episodeId,
+        pricePerSecondShannon: episode.price_per_second.toString(),
+        segmentDurationSec,
+      },
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to create session'
+    return c.json({ ok: false, error: message }, 500)
+  }
 })
 
 // ---------------------------------------------------------------------------
@@ -244,8 +282,20 @@ app.post('/invoices/create', async (c) => {
     return c.json({ ok: false, error: 'Invalid sessionId' }, 400)
   }
 
+  // Get episode to use its price_per_second
+  const episode = db.prepare(`
+    SELECT price_per_second
+    FROM episodes
+    WHERE id = ?
+  `).get(session.episodeId) as { price_per_second: number } | undefined
+
+  if (!episode) {
+    return c.json({ ok: false, error: 'Episode not found for this session' }, 404)
+  }
+
   const seconds = Math.max(1, Math.floor(Number(body.seconds ?? 30)))
-  const amountShannon = PRICE_PER_SECOND_SHANNON * BigInt(seconds)
+  const pricePerSecond = BigInt(episode.price_per_second)
+  const amountShannon = pricePerSecond * BigInt(seconds)
 
   // Generate preimage and derive payment_hash using configured algorithm
   const preimage = randomBytes32() as string
@@ -469,6 +519,25 @@ app.get('/stream/hls/:fileName', async (c) => {
     return c.text('Unsupported media file', 400)
   }
 
+  // Get session to find episode
+  const session = sessions.get(grant.sessionId)
+  if (!session) {
+    return c.text('Session not found', 401)
+  }
+
+  // Get episode to construct HLS path from storage_path
+  const episode = db.prepare(`
+    SELECT storage_path
+    FROM episodes
+    WHERE id = ?
+  `).get(session.episodeId) as { storage_path: string } | undefined
+
+  if (!episode || !episode.storage_path) {
+    return c.text('Episode or storage not found', 404)
+  }
+
+  // HLS files are in the 'hls' subdirectory of the episode's storage directory
+  const hlsDir = path.join(path.dirname(episode.storage_path), 'hls')
   const targetPath = path.resolve(hlsDir, fileName)
   if (!targetPath.startsWith(hlsDir)) {
     return c.text('Invalid path', 400)
