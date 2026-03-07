@@ -16,8 +16,44 @@ import {
 import { db } from './db.js'
 import { StorageService } from './storage.js'
 import { transcodeService } from './transcode.js'
+import {
+  validateBody,
+  validateAudioFile,
+  createPodcastSchema,
+  updatePodcastSchema,
+  createEpisodeSchema,
+  updateEpisodeSchema,
+  createSessionSchema,
+  createInvoiceSchema,
+  claimInvoiceSchema,
+  uuidParamSchema,
+  type ErrorResponse,
+} from './validation.js'
 
 const app = new Hono()
+
+// Request size limits
+const MAX_JSON_SIZE = 10 * 1024 * 1024 // 10MB
+const MAX_UPLOAD_SIZE = 500 * 1024 * 1024 // 500MB
+
+// Middleware to enforce body size limits
+app.use('*', async (c, next) => {
+  const contentLength = c.req.header('content-length')
+  if (contentLength) {
+    const size = parseInt(contentLength, 10)
+    const contentType = c.req.header('content-type') || ''
+    
+    // Check upload endpoints separately
+    if (c.req.path.includes('/upload')) {
+      if (size > MAX_UPLOAD_SIZE) {
+        return c.json({ ok: false, error: `Request body too large. Max: 500MB` }, 413)
+      }
+    } else if (size > MAX_JSON_SIZE) {
+      return c.json({ ok: false, error: `Request body too large. Max: 10MB` }, 413)
+    }
+  }
+  await next()
+})
 
 app.use('*', cors())
 
@@ -324,16 +360,12 @@ app.get('/node-info', async (c) => {
 // Returns a sessionId and the initial (empty) stream token.
 // ---------------------------------------------------------------------------
 app.post('/sessions/create', async (c) => {
-  const body = (await c.req.json().catch(() => ({}))) as {
-    episodeId?: string
+  const validation = await validateBody(c, createSessionSchema)
+  if (!validation.success) {
+    return c.json({ ok: false, error: validation.error }, 400)
   }
 
-  const episodeId = body.episodeId ?? ''
-
-  // Validate episode exists and is published
-  if (!episodeId) {
-    return c.json({ ok: false, error: 'episodeId is required' }, 400)
-  }
+  const { episodeId } = validation.data
 
   try {
     const episode = db.prepare(`
@@ -390,12 +422,12 @@ app.post('/sessions/create', async (c) => {
 // Returns: { invoiceAddress, paymentHash, amountShannon, seconds }
 // ---------------------------------------------------------------------------
 app.post('/invoices/create', async (c) => {
-  const body = (await c.req.json().catch(() => ({}))) as {
-    sessionId?: string
-    seconds?: number
+  const validation = await validateBody(c, createInvoiceSchema)
+  if (!validation.success) {
+    return c.json({ ok: false, error: validation.error }, 400)
   }
 
-  const sessionId = body.sessionId ?? ''
+  const { sessionId, seconds: requestedSeconds } = validation.data
   const session = getStreamSessionById(sessionId)
   if (!session) {
     return c.json({ ok: false, error: 'Invalid sessionId' }, 400)
@@ -412,7 +444,7 @@ app.post('/invoices/create', async (c) => {
     return c.json({ ok: false, error: 'Episode not found for this session' }, 404)
   }
 
-  const seconds = Math.max(1, Math.floor(Number(body.seconds ?? 30)))
+  const seconds = requestedSeconds ?? 30
   const pricePerSecond = BigInt(episode.price_per_second)
   const amountShannon = pricePerSecond * BigInt(seconds)
 
@@ -492,11 +524,12 @@ app.post('/invoices/create', async (c) => {
 // Returns the stream token and updated grant info.
 // ---------------------------------------------------------------------------
 app.post('/invoices/claim', async (c) => {
-  const body = (await c.req.json().catch(() => ({}))) as {
-    paymentHash?: string
+  const validation = await validateBody(c, claimInvoiceSchema)
+  if (!validation.success) {
+    return c.json({ ok: false, error: validation.error }, 400)
   }
 
-  const paymentHash = body.paymentHash ?? ''
+  const { paymentHash } = validation.data
   const hold = getPaymentByHash(paymentHash)
   if (!hold) {
     return c.json({ ok: false, error: 'Unknown payment hash' }, 400)
@@ -839,20 +872,12 @@ app.post('/admin/podcasts', async (c) => {
     return c.json({ ok: false, error: auth.error }, 401)
   }
 
-  const body = (await c.req.json().catch(() => ({}))) as {
-    title?: string
-    description?: string
+  const validation = await validateBody(c, createPodcastSchema)
+  if (!validation.success) {
+    return c.json({ ok: false, error: validation.error }, 400)
   }
 
-  // Validation
-  if (!body.title || body.title.trim() === '') {
-    return c.json({ ok: false, error: 'Title is required' }, 400)
-  }
-
-  if (body.title.length > 255) {
-    return c.json({ ok: false, error: 'Title must be 255 characters or less' }, 400)
-  }
-
+  const { title, description } = validation.data
   const id = randomUUID()
   const now = Date.now()
 
@@ -860,14 +885,14 @@ app.post('/admin/podcasts', async (c) => {
     db.prepare(`
       INSERT INTO podcasts (id, title, description, created_at)
       VALUES (?, ?, ?, ?)
-    `).run(id, body.title.trim(), body.description || null, now)
+    `).run(id, title, description ?? null, now)
 
     return c.json({
       ok: true,
       podcast: {
         id,
-        title: body.title.trim(),
-        description: body.description || null,
+        title,
+        description: description ?? null,
         created_at: now,
       },
     }, 201)
@@ -949,18 +974,17 @@ app.put('/admin/podcasts/:id', async (c) => {
   }
 
   const id = c.req.param('id')
-  const body = (await c.req.json().catch(() => ({}))) as {
-    title?: string
-    description?: string
+
+  const validation = await validateBody(c, updatePodcastSchema)
+  if (!validation.success) {
+    return c.json({ ok: false, error: validation.error }, 400)
   }
 
-  // Validation
-  if (body.title !== undefined && body.title.trim() === '') {
-    return c.json({ ok: false, error: 'Title cannot be empty' }, 400)
-  }
+  const { title, description } = validation.data
 
-  if (body.title && body.title.length > 255) {
-    return c.json({ ok: false, error: 'Title must be 255 characters or less' }, 400)
+  // Check if at least one field is provided
+  if (title === undefined && description === undefined) {
+    return c.json({ ok: false, error: 'No fields to update' }, 400)
   }
 
   try {
@@ -974,18 +998,14 @@ app.put('/admin/podcasts/:id', async (c) => {
     const updates: string[] = []
     const params: (string | null)[] = []
 
-    if (body.title !== undefined) {
+    if (title !== undefined) {
       updates.push('title = ?')
-      params.push(body.title.trim())
+      params.push(title)
     }
 
-    if (body.description !== undefined) {
+    if (description !== undefined) {
       updates.push('description = ?')
-      params.push(body.description || null)
-    }
-
-    if (updates.length === 0) {
-      return c.json({ ok: false, error: 'No fields to update' }, 400)
+      params.push(description ?? null)
     }
 
     params.push(id)
@@ -1058,36 +1078,23 @@ app.post('/admin/episodes', async (c) => {
     return c.json({ ok: false, error: auth.error }, 401)
   }
 
-  const body = (await c.req.json().catch(() => ({}))) as {
-    podcast_id?: string
-    title?: string
-    description?: string
-    price_per_second?: string
+  const validation = await validateBody(c, createEpisodeSchema)
+  if (!validation.success) {
+    return c.json({ ok: false, error: validation.error }, 400)
   }
 
-  // Validation
-  if (!body.podcast_id || body.podcast_id.trim() === '') {
-    return c.json({ ok: false, error: 'podcast_id is required' }, 400)
-  }
-
-  if (!body.title || body.title.trim() === '') {
-    return c.json({ ok: false, error: 'Title is required' }, 400)
-  }
-
-  if (body.title.length > 255) {
-    return c.json({ ok: false, error: 'Title must be 255 characters or less' }, 400)
-  }
+  const { podcast_id, title, description, price_per_second } = validation.data
 
   try {
     // Check if podcast exists
-    const podcast = db.prepare('SELECT id FROM podcasts WHERE id = ?').get(body.podcast_id) as { id: string } | undefined
+    const podcast = db.prepare('SELECT id FROM podcasts WHERE id = ?').get(podcast_id) as { id: string } | undefined
     if (!podcast) {
       return c.json({ ok: false, error: 'Podcast not found' }, 404)
     }
 
     const id = randomUUID()
     const now = Date.now()
-    const pricePerSecond = body.price_per_second ? BigInt(body.price_per_second) : DEFAULT_PRICE_PER_SECOND
+    const pricePerSecond = price_per_second ? BigInt(price_per_second) : DEFAULT_PRICE_PER_SECOND
     const storagePath = '' // Will be set after upload
 
     db.prepare(`
@@ -1095,9 +1102,9 @@ app.post('/admin/episodes', async (c) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
-      body.podcast_id,
-      body.title.trim(),
-      body.description || null,
+      podcast_id,
+      title,
+      description ?? null,
       null, // duration
       storagePath,
       pricePerSecond,
@@ -1109,9 +1116,9 @@ app.post('/admin/episodes', async (c) => {
       ok: true,
       episode: {
         id,
-        podcast_id: body.podcast_id,
-        title: body.title.trim(),
-        description: body.description || null,
+        podcast_id,
+        title,
+        description: description ?? null,
         duration: null,
         storage_path: storagePath,
         price_per_second: pricePerSecond.toString(),
@@ -1165,12 +1172,16 @@ app.post('/admin/episodes/:id/upload', async (c) => {
     const formData = await c.req.formData()
     const file = formData.get('file') as File | null
 
-    if (!file) {
-      return c.json({ ok: false, error: 'No file provided' }, 400)
+    // Validate file
+    const fileValidation = validateAudioFile(file)
+    if (!fileValidation.success) {
+      return c.json({ ok: false, error: fileValidation.error }, 400)
     }
 
+    const validatedFile = fileValidation.file!
+
     // Convert File to stream
-    const fileBuffer = Buffer.from(await file.arrayBuffer())
+    const fileBuffer = Buffer.from(await validatedFile.arrayBuffer())
     const { Readable } = await import('node:stream')
     const fileStream = Readable.from(fileBuffer)
 
@@ -1178,9 +1189,9 @@ app.post('/admin/episodes/:id/upload', async (c) => {
     const result = await StorageService.upload(
       episode.podcast_id,
       fileStream,
-      file.type,
-      file.size,
-      file.name
+      validatedFile.type,
+      validatedFile.size,
+      validatedFile.name
     )
 
     // Update episode with storage path and status
@@ -1320,19 +1331,17 @@ app.put('/admin/episodes/:id', async (c) => {
   }
 
   const id = c.req.param('id')
-  const body = (await c.req.json().catch(() => ({}))) as {
-    title?: string
-    description?: string
-    price_per_second?: string
+
+  const validation = await validateBody(c, updateEpisodeSchema)
+  if (!validation.success) {
+    return c.json({ ok: false, error: validation.error }, 400)
   }
 
-  // Validation
-  if (body.title !== undefined && body.title.trim() === '') {
-    return c.json({ ok: false, error: 'Title cannot be empty' }, 400)
-  }
+  const { title, description, price_per_second } = validation.data
 
-  if (body.title && body.title.length > 255) {
-    return c.json({ ok: false, error: 'Title must be 255 characters or less' }, 400)
+  // Check if at least one field is provided
+  if (title === undefined && description === undefined && price_per_second === undefined) {
+    return c.json({ ok: false, error: 'No fields to update' }, 400)
   }
 
   try {
@@ -1354,23 +1363,19 @@ app.put('/admin/episodes/:id', async (c) => {
     const updates: string[] = []
     const params: (string | number | null)[] = []
 
-    if (body.title !== undefined) {
+    if (title !== undefined) {
       updates.push('title = ?')
-      params.push(body.title.trim())
+      params.push(title)
     }
 
-    if (body.description !== undefined) {
+    if (description !== undefined) {
       updates.push('description = ?')
-      params.push(body.description || null)
+      params.push(description ?? null)
     }
 
-    if (body.price_per_second !== undefined) {
+    if (price_per_second !== undefined) {
       updates.push('price_per_second = ?')
-      params.push(BigInt(body.price_per_second).toString())
-    }
-
-    if (updates.length === 0) {
-      return c.json({ ok: false, error: 'No fields to update' }, 400)
+      params.push(BigInt(price_per_second).toString())
     }
 
     params.push(id)
@@ -1532,3 +1537,5 @@ serve(
     console.log(`backend listening on http://localhost:${info.port}`)
   }
 )
+
+export { app }

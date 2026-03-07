@@ -128,4 +128,9 @@ export const db = DatabaseManager.getInstance();
 export const healthCheck = DatabaseManager.healthCheck;
 export const closeDb = DatabaseManager.close;
 
+import { runMigrations } from "./migrations.js";
+runMigrations().catch((err) => {
+  console.error("[db] Migration failed:", err);
+});
+
 export default db;
