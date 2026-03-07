@@ -13,6 +13,7 @@ import {
   toHex,
   type Currency,
 } from '@fiber-pay/sdk'
+import { db } from './db.js'
 
 const app = new Hono()
 
@@ -485,6 +486,244 @@ app.get('/stream/hls/:fileName', async (c) => {
     return c.body(fileBuffer)
   } catch {
     return c.text('HLS file not found', 404)
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Admin API - Podcast CRUD Operations
+// ---------------------------------------------------------------------------
+const ADMIN_API_KEY = process.env.ADMIN_API_KEY || ''
+
+import type { Context } from 'hono'
+
+function requireAdminAuth(c: Context) {
+  const authHeader = c.req.header('Authorization') || ''
+  const match = authHeader.match(/^Bearer\s+(.+)$/i)
+  const providedKey = match ? match[1] : ''
+
+  if (!ADMIN_API_KEY) {
+    return { ok: false, error: 'Server not configured for admin access' } as const
+  }
+
+  if (providedKey !== ADMIN_API_KEY) {
+    return { ok: false, error: 'Invalid or missing API key' } as const
+  }
+
+  return { ok: true } as const
+}
+
+// POST /admin/podcasts - Create podcast
+app.post('/admin/podcasts', async (c) => {
+  const auth = requireAdminAuth(c)
+  if (!auth.ok) {
+    return c.json({ ok: false, error: auth.error }, 401)
+  }
+
+  const body = (await c.req.json().catch(() => ({}))) as {
+    title?: string
+    description?: string
+  }
+
+  // Validation
+  if (!body.title || body.title.trim() === '') {
+    return c.json({ ok: false, error: 'Title is required' }, 400)
+  }
+
+  if (body.title.length > 255) {
+    return c.json({ ok: false, error: 'Title must be 255 characters or less' }, 400)
+  }
+
+  const id = randomUUID()
+  const now = Date.now()
+
+  try {
+    db.prepare(`
+      INSERT INTO podcasts (id, title, description, created_at)
+      VALUES (?, ?, ?, ?)
+    `).run(id, body.title.trim(), body.description || null, now)
+
+    return c.json({
+      ok: true,
+      podcast: {
+        id,
+        title: body.title.trim(),
+        description: body.description || null,
+        created_at: now,
+      },
+    }, 201)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to create podcast'
+    return c.json({ ok: false, error: message }, 500)
+  }
+})
+
+// GET /admin/podcasts - List all podcasts
+app.get('/admin/podcasts', async (c) => {
+  const auth = requireAdminAuth(c)
+  if (!auth.ok) {
+    return c.json({ ok: false, error: auth.error }, 401)
+  }
+
+  try {
+    const podcasts = db.prepare(`
+      SELECT id, title, description, created_at
+      FROM podcasts
+      ORDER BY created_at DESC
+    `).all() as Array<{
+      id: string
+      title: string
+      description: string | null
+      created_at: number
+    }>
+
+    return c.json({
+      ok: true,
+      podcasts,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to list podcasts'
+    return c.json({ ok: false, error: message }, 500)
+  }
+})
+
+// GET /admin/podcasts/:id - Get podcast details
+app.get('/admin/podcasts/:id', async (c) => {
+  const auth = requireAdminAuth(c)
+  if (!auth.ok) {
+    return c.json({ ok: false, error: auth.error }, 401)
+  }
+
+  const id = c.req.param('id')
+
+  try {
+    const podcast = db.prepare(`
+      SELECT id, title, description, created_at
+      FROM podcasts
+      WHERE id = ?
+    `).get(id) as {
+      id: string
+      title: string
+      description: string | null
+      created_at: number
+    } | undefined
+
+    if (!podcast) {
+      return c.json({ ok: false, error: 'Podcast not found' }, 404)
+    }
+
+    return c.json({
+      ok: true,
+      podcast,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to get podcast'
+    return c.json({ ok: false, error: message }, 500)
+  }
+})
+
+// PUT /admin/podcasts/:id - Update podcast
+app.put('/admin/podcasts/:id', async (c) => {
+  const auth = requireAdminAuth(c)
+  if (!auth.ok) {
+    return c.json({ ok: false, error: auth.error }, 401)
+  }
+
+  const id = c.req.param('id')
+  const body = (await c.req.json().catch(() => ({}))) as {
+    title?: string
+    description?: string
+  }
+
+  // Validation
+  if (body.title !== undefined && body.title.trim() === '') {
+    return c.json({ ok: false, error: 'Title cannot be empty' }, 400)
+  }
+
+  if (body.title && body.title.length > 255) {
+    return c.json({ ok: false, error: 'Title must be 255 characters or less' }, 400)
+  }
+
+  try {
+    // Check if podcast exists
+    const existing = db.prepare('SELECT id FROM podcasts WHERE id = ?').get(id) as { id: string } | undefined
+    if (!existing) {
+      return c.json({ ok: false, error: 'Podcast not found' }, 404)
+    }
+
+    // Build update query
+    const updates: string[] = []
+    const params: (string | null)[] = []
+
+    if (body.title !== undefined) {
+      updates.push('title = ?')
+      params.push(body.title.trim())
+    }
+
+    if (body.description !== undefined) {
+      updates.push('description = ?')
+      params.push(body.description || null)
+    }
+
+    if (updates.length === 0) {
+      return c.json({ ok: false, error: 'No fields to update' }, 400)
+    }
+
+    params.push(id)
+
+    db.prepare(`
+      UPDATE podcasts
+      SET ${updates.join(', ')}
+      WHERE id = ?
+    `).run(...params)
+
+    // Get updated podcast
+    const podcast = db.prepare(`
+      SELECT id, title, description, created_at
+      FROM podcasts
+      WHERE id = ?
+    `).get(id) as {
+      id: string
+      title: string
+      description: string | null
+      created_at: number
+    }
+
+    return c.json({
+      ok: true,
+      podcast,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to update podcast'
+    return c.json({ ok: false, error: message }, 500)
+  }
+})
+
+// DELETE /admin/podcasts/:id - Delete podcast (cascades to episodes)
+app.delete('/admin/podcasts/:id', async (c) => {
+  const auth = requireAdminAuth(c)
+  if (!auth.ok) {
+    return c.json({ ok: false, error: auth.error }, 401)
+  }
+
+  const id = c.req.param('id')
+
+  try {
+    // Check if podcast exists
+    const existing = db.prepare('SELECT id FROM podcasts WHERE id = ?').get(id) as { id: string } | undefined
+    if (!existing) {
+      return c.json({ ok: false, error: 'Podcast not found' }, 404)
+    }
+
+    // Delete will cascade to episodes due to ON DELETE CASCADE
+    db.prepare('DELETE FROM podcasts WHERE id = ?').run(id)
+
+    return c.json({
+      ok: true,
+      message: 'Podcast and associated episodes deleted successfully',
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to delete podcast'
+    return c.json({ ok: false, error: message }, 500)
   }
 })
 
