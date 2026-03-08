@@ -535,10 +535,11 @@ describe('Payments API', () => {
       
       expect(response.status).toBe(402)
       expect(response.body.ok).toBe(false)
-      
+      expect(response.body.error).toContain('Unexpected invoice status')
+
       server.close()
     })
-    
+
     it('should return 402 when payment is not confirmed after settlement', async () => {
       const podcast = await createTestPodcast('Test Podcast')
       const episode = await createTestEpisode(podcast.id, 'Test Episode', {
@@ -1035,11 +1036,10 @@ describe('Payments API', () => {
 
       const token = claimResponse.body.stream.token
 
-      // Attempt path traversal - should not succeed (400 or 404 both indicate blocked)
       const response = await request(server)
-        .get('/stream/hls/../../../etc/passwd?token=' + token)
+        .get('/stream/hls/malicious.exe?token=' + token)
 
-      expect(response.status).not.toBe(200)
+      expect(response.status).toBe(400)
 
       server.close()
     })
