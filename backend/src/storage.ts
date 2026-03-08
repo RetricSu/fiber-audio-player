@@ -11,18 +11,27 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Storage root directory
-const UPLOADS_DIR = path.join(__dirname, "..", "uploads");
+const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, "..", "uploads");
 
 // File size limits
 const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
 
 // Allowed MIME types for audio files
-const ALLOWED_MIME_TYPES = new Set(["audio/mpeg", "audio/mp3"]);
+const ALLOWED_MIME_TYPES = new Set([
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/wav",
+  "audio/ogg",
+  "audio/aac",
+]);
 
 // File extension mapping
 const MIME_TYPE_EXTENSIONS: Record<string, string> = {
   "audio/mpeg": ".mp3",
   "audio/mp3": ".mp3",
+  "audio/wav": ".wav",
+  "audio/ogg": ".ogg",
+  "audio/aac": ".aac",
 };
 
 // Storage error types
