@@ -707,12 +707,8 @@ app.get('/stream/hls/:fileName', async (c) => {
 
 // Helper function to construct HLS URL from storage_path
 function constructHlsUrl(storagePath: string): string | null {
-  // From storage_path like: uploads/{podcast_id}/{episode_id}/source.mp3
-  // Extract podcast_id and episode_id from the path
-  const match = storagePath.match(/uploads\/([^/]+)\/([^/]+)/)
-  if (!match) return null
-  const [, podcastId, episodeId] = match
-  return `/stream/${podcastId}/${episodeId}/hls/playlist.m3u8`
+  // Returns the fixed HLS playlist URL; storagePath is kept for compatibility
+  return `/stream/hls/playlist.m3u8`
 }
 
 // GET /api/podcasts - List all published podcasts
@@ -1188,6 +1184,7 @@ app.post('/admin/episodes/:id/upload', async (c) => {
     // Upload file to storage
     const result = await StorageService.upload(
       episode.podcast_id,
+      id,
       fileStream,
       validatedFile.type,
       validatedFile.size,
@@ -1526,7 +1523,7 @@ app.post('/admin/episodes/:id/publish', async (c) => {
 
 const port = Number(process.env.PORT ?? 8787)
 
-async function startServer() {
+export async function startServer() {
   await initDb()
   transcodeService.initializeTranscodeQueue()
 
@@ -1540,7 +1537,5 @@ async function startServer() {
     }
   )
 }
-
-startServer()
 
 export { app }
