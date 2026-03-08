@@ -47,3 +47,6 @@ next-env.d.ts
 
 # pnpm cache
 /backend/.pnpm-only-built-deps
+
+# sisyphus planning
+.sisyphus/
