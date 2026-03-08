@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { db } from './db.js';
+import { getDb } from './db.js';
 import { transcodeQueue, type TranscodeJob } from './queue.js';
 
 export interface TranscodeResult {
@@ -257,7 +257,7 @@ export async function updateEpisodeStatus(
   status: 'draft' | 'processing' | 'ready' | 'published' | 'archived',
   duration?: number,
 ): Promise<void> {
-  const stmt = db.prepare(
+  const stmt = getDb().prepare(
     'UPDATE episodes SET status = ?, duration = COALESCE(?, duration) WHERE id = ?'
   );
   stmt.run(status, duration ?? null, episodeId);
