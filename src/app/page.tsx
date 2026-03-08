@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AudioPlayer } from '@/components/AudioPlayer';
-import { NodeStatus } from '@/components/NodeStatus';
+import { Header } from '@/components/Header';
 import { PaymentHistory } from '@/components/PaymentHistory';
 import { PodcastList, Podcast } from '@/components/PodcastList';
 import { EpisodeList } from '@/components/EpisodeList';
@@ -111,53 +111,39 @@ export default function Home() {
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
-      <motion.header
-        className="py-6 px-4 sm:px-6 lg:px-8 border-b border-fiber-border/50"
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-      >
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <div className="w-10 h-10 rounded-xl bg-fiber-accent/20 flex items-center justify-center">
-                <svg
-                  className="w-5 h-5 text-fiber-accent"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 10V3L4 14h7v7l9-11h-7z"
-                  />
-                </svg>
-              </div>
-              <motion.div
-                className="absolute inset-0 rounded-xl bg-fiber-accent/30"
-                animate={{ scale: [1, 1.5], opacity: [0.5, 0] }}
-                transition={{ duration: 2, repeat: Infinity }}
-              />
-            </div>
-            <div>
-              <h1 className="text-xl font-display font-light text-white">
-                Fiber <span className="text-gradient">Audio</span>
-              </h1>
-              <p className="text-xs text-fiber-muted">Stream. Listen. Pay.</p>
-            </div>
-          </div>
-
-          {backendError && (
-            <div className="text-xs text-red-400 font-mono">{backendError}</div>
-          )}
-        </div>
-      </motion.header>
+      {/* Header with Node Connect Dropdown */}
+      <Header
+        isConnected={fiberNode.isConnected}
+        isConnecting={fiberNode.isConnecting}
+        nodeInfo={fiberNode.nodeInfo}
+        error={fiberNode.error}
+        rpcUrl={rpcUrl}
+        onConnect={fiberNode.connect}
+        onDisconnect={fiberNode.disconnect}
+        channelStatus={fiberNode.channelStatus}
+        channelError={fiberNode.channelError}
+        channelStateName={fiberNode.channelStateName}
+        channelElapsed={fiberNode.channelElapsed}
+        availableBalance={fiberNode.availableBalance}
+        channelCount={fiberNode.channels.length}
+        peerCount={fiberNode.peers.length}
+        fundingAmountCkb={fiberNode.fundingAmountCkb}
+        fundingBalanceCkb={fiberNode.fundingBalanceCkb}
+        isFundingSufficient={fiberNode.isFundingSufficient}
+        fundingBalanceError={fiberNode.fundingBalanceError}
+        faucetUrl={FAUCET_URL}
+        recipientPubkey={recipientPubkey}
+        recipientMultiaddrConfigured={Boolean(BOOTNODE_MULTIADDR.trim())}
+        onCheckRoute={() => fiberNode.checkPaymentRoute(recipientPubkey)}
+        onOpenChannel={() => fiberNode.setupChannel(recipientPubkey)}
+        onCancelSetup={fiberNode.cancelChannelSetup}
+        rpcUrlValue={rpcUrl}
+        onRpcUrlChange={setRpcUrl}
+        backendError={backendError}
+      />
 
       {/* Main content */}
-      <div className="flex h-[calc(100vh-80px)]">
+      <div className="flex h-[calc(100vh-64px)]">
         {/* Sidebar - Podcast and Episode browsing */}
         <motion.div
           className="w-1/3 min-w-[320px] max-w-[450px] border-r border-fiber-border/50 overflow-hidden flex flex-col bg-fiber-dark/50"
@@ -266,63 +252,13 @@ export default function Home() {
               )}
             </motion.div>
 
-            {/* Node Status and Payment History */}
+            {/* Payment History */}
             <motion.div
-              className="grid md:grid-cols-2 gap-6"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.3 }}
             >
-              {/* Node Status */}
-              <div className="relative z-30">
-                <NodeStatus
-                  isConnected={fiberNode.isConnected}
-                  isConnecting={fiberNode.isConnecting}
-                  nodeInfo={fiberNode.nodeInfo}
-                  error={fiberNode.error}
-                  rpcUrl={rpcUrl}
-                  onConnect={fiberNode.connect}
-                  onDisconnect={fiberNode.disconnect}
-                  channelStatus={fiberNode.channelStatus}
-                  channelError={fiberNode.channelError}
-                  channelStateName={fiberNode.channelStateName}
-                  channelElapsed={fiberNode.channelElapsed}
-                  availableBalance={fiberNode.availableBalance}
-                  channelCount={fiberNode.channels.length}
-                  peerCount={fiberNode.peers.length}
-                  fundingAmountCkb={fiberNode.fundingAmountCkb}
-                  fundingBalanceCkb={fiberNode.fundingBalanceCkb}
-                  isFundingSufficient={fiberNode.isFundingSufficient}
-                  fundingBalanceError={fiberNode.fundingBalanceError}
-                  faucetUrl={FAUCET_URL}
-                  recipientPubkey={recipientPubkey}
-                  recipientMultiaddrConfigured={Boolean(BOOTNODE_MULTIADDR.trim())}
-                  onCheckRoute={() => fiberNode.checkPaymentRoute(recipientPubkey)}
-                  onOpenChannel={() => fiberNode.setupChannel(recipientPubkey)}
-                  onCancelSetup={fiberNode.cancelChannelSetup}
-                  topConfigPanel={
-                    !fiberNode.isConnected ? (
-                      <div>
-                        <label className="block text-xs text-fiber-muted/95 mb-2 font-mono uppercase tracking-wider">
-                          Fiber RPC URL
-                        </label>
-                        <input
-                          type="text"
-                          value={rpcUrl}
-                          onChange={(e) => setRpcUrl(e.target.value)}
-                          className="w-full px-3 py-2 bg-fiber-dark border border-fiber-border rounded-lg text-sm font-mono text-white focus:outline-none focus:border-fiber-accent/50 transition-colors"
-                          placeholder="http://127.0.0.1:28229"
-                        />
-                      </div>
-                    ) : null
-                  }
-                />
-              </div>
-
-              {/* Payment History */}
-              <div className="relative z-10">
-                <PaymentHistory payments={payment.paymentHistory} />
-              </div>
+              <PaymentHistory payments={payment.paymentHistory} />
             </motion.div>
           </div>
         </div>
