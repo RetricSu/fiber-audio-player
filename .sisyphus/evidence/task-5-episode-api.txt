@@ -1,0 +1,48 @@
+Task 5: Episode Admin API Implementation
+========================================
+
+Evidence of Completion:
+-----------------------
+
+1. Typecheck Results:
+   - Command: pnpm typecheck
+   - Result: PASSED (no errors)
+   - Date: $(date)
+
+2. Endpoints Implemented:
+   - POST /admin/episodes - Create episode metadata (status=draft)
+   - POST /admin/episodes/:id/upload - Upload audio file (triggers transcoding)
+   - GET /admin/episodes - List episodes for a podcast
+   - GET /admin/episodes/:id - Get episode details
+   - PUT /admin/episodes/:id - Update metadata
+   - DELETE /admin/episodes/:id - Delete episode and files
+   - POST /admin/episodes/:id/publish - Set status=published
+
+3. Features Implemented:
+   - API key auth (same as Task 4)
+   - File upload via multipart/form-data
+   - Automatic transcoding queue on upload
+   - Episode status workflow: draft → processing → ready → published
+   - Default price_per_second from env var (DEFAULT_PRICE_PER_SECOND, fallback 10000)
+   - Custom price_per_second per episode support
+   - Clean up files on episode deletion
+   - Validation: podcast must exist before creating episode
+   - Validation: cannot edit published episodes
+   - Validation: cannot upload to published episodes
+   - Validation: can only publish episodes in 'ready' status
+
+4. Dependencies Used:
+   - StorageService from './storage.js'
+   - transcodeService.queueTranscodeJob for transcoding
+   - transcodeService.initializeTranscodeQueue() on startup
+   - db from './db.js'
+
+5. Environment Variable:
+   - DEFAULT_PRICE_PER_SECOND (fallback: 10000)
+
+6. Database Operations:
+   - INSERT INTO episodes (create)
+   - UPDATE episodes SET ... (update status, metadata)
+   - SELECT * FROM episodes WHERE ... (get/list)
+   - DELETE FROM episodes WHERE ... (delete)
+

@@ -1,0 +1,53 @@
+Task 12: Database Migration System
+=====================================
+
+COMPLETED: 2026-03-07
+
+Files Created:
+--------------
+1. backend/src/migrations.ts - Migration runner with transaction support
+2. backend/migrations/001_initial_schema.sql - Initial schema migration
+3. backend/migrations/ - Directory for migration files
+
+Migration System Features:
+--------------------------
+- Auto-runs pending migrations on backend startup
+- Transaction support (atomic via better-sqlite3 db.transaction())
+- Version tracking via migrations table (id, name, applied_at)
+- Natural sort ordering (001_, 002_, etc.)
+- Idempotent - skips already applied migrations
+
+Migrations Table Schema:
+------------------------
+CREATE TABLE migrations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  applied_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER) * 1000)
+);
+
+Test Results:
+-------------
+✅ Typecheck passed (pnpm typecheck)
+✅ Build successful (pnpm build)
+✅ First run: Applied 1 new migration
+[migration] Starting migration runner...
+[migration] 0 migrations already applied: []
+[migration] Found 1 migration files: [ '001_initial_schema.sql' ]
+[migration] Applied: 001_initial_schema.sql
+[migration] Complete. Applied 1 new migrations. Total: 1
+
+✅ Second run: Correctly skipped already applied
+[migration] Starting migration runner...
+[migration] 1 migrations already applied: [ '001_initial_schema.sql' ]
+[migration] Found 1 migration files: [ '001_initial_schema.sql' ]
+[migration] Skipping already applied: 001_initial_schema.sql
+[migration] Complete. Applied 0 new migrations. Total: 1
+
+✅ Migrations table verified:
+1|001_initial_schema.sql|1772877128000
+
+Integration:
+------------
+- db.ts imports and calls runMigrations() after initialization
+- Migrations run asynchronously on startup (non-blocking)
+- Existing schema initialization preserved for backward compatibility

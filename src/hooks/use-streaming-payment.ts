@@ -17,7 +17,7 @@ export interface UseStreamingPaymentResult {
   error: string | null;
   currentGrant: StreamGrant | null;
   /** Start streaming – creates session, pays first invoice, returns grant */
-  start: (seconds?: number) => Promise<StreamGrant | null>;
+  start: (episodeId?: string, seconds?: number) => Promise<StreamGrant | null>;
   /** Pay for more seconds within the active session */
   extend: (seconds?: number) => Promise<StreamGrant | null>;
   stop: () => Promise<void>;
@@ -74,11 +74,11 @@ export function useStreamingPayment(
     config.ratePerSecond,
   ]);
 
-  const start = useCallback(async (seconds: number = 30): Promise<StreamGrant | null> => {
+  const start = useCallback(async (episodeId?: string, seconds: number = 30): Promise<StreamGrant | null> => {
     if (!serviceRef.current) return null;
     setError(null);
     try {
-      const grant = await serviceRef.current.startStreaming(seconds);
+      const grant = await serviceRef.current.startStreaming(episodeId, seconds);
       setIsStreaming(true);
       setCurrentGrant(grant);
       return grant;

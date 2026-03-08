@@ -40,3 +40,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# database
+/backend/data/*.db
+/backend/data/*.db-journal
+
+# pnpm cache
+/backend/.pnpm-only-built-deps

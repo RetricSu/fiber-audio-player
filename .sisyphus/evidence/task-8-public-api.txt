@@ -1,0 +1,51 @@
+# Task 8: Public API Endpoints - Evidence
+
+## Implementation
+Added 3 public API endpoints to backend/src/index.ts (no authentication required):
+
+### Endpoints
+
+1. **GET /api/podcasts**
+   - Lists all podcasts
+   - Returns: id, title, description, created_at
+   - Cache-Control: public, max-age=300 (5 minutes)
+
+2. **GET /api/podcasts/:id/episodes**
+   - Lists published episodes for a specific podcast
+   - Filters: only episodes with status='published'
+   - Returns: id, podcast_id, title, description, duration, price_per_second, status, hls_url, created_at
+   - Cache-Control: public, max-age=300 (5 minutes)
+   - Returns 404 if podcast not found
+
+3. **GET /api/episodes/:id**
+   - Gets single episode details
+   - Filters: only episodes with status='published'
+   - Returns: id, podcast_id, title, description, duration, price_per_second, status, hls_url, created_at
+   - Cache-Control: public, max-age=60 (1 minute)
+   - Returns 404 if episode not found or not published
+
+### Helper Function
+
+```typescript
+function constructHlsUrl(storagePath: string): string | null {
+  const match = storagePath.match(/uploads\/([^/]+)\/([^/]+)/)
+  if (!match) return null
+  const [, podcastId, episodeId] = match
+  return `/stream/${podcastId}/${episodeId}/hls/playlist.m3u8`
+}
+```
+
+### Security
+- No authentication required
+- Only returns published content (status='published')
+- Does not expose internal storage paths
+- HLS URLs constructed without tokens (frontend gets token via payment)
+
+### Verification
+```bash
+cd /Users/retric/Desktop/fiber-audio-player/backend
+pnpm typecheck
+# Result: ✓ No errors
+```
+
+Date: 2026-03-07

@@ -1,0 +1,66 @@
+# Task 15: Integration Tests Implementation
+
+## Completed Tasks
+- Installed vitest, supertest, and @types/supertest as dev dependencies
+- Exported app from backend/src/index.ts for testing
+- Created vitest.config.ts with test configuration
+- Created backend/tests/ directory structure
+- Created comprehensive integration tests for:
+  - Health endpoint (1 test)
+  - Podcasts API (17 tests) - public and admin endpoints
+  - Episodes API (20 tests) - public and admin endpoints
+- Added "test": "vitest run" script to package.json
+- Tests clean up database and test uploads after each test
+
+## Test Results
+All 38 tests passing:
+- ✓ Health API: 1/1 tests
+- ✓ Podcasts API: 17/17 tests  
+- ✓ Episodes API: 20/20 tests
+
+## Test Infrastructure
+- Uses dynamic imports to ensure test environment variables are set before app initialization
+- Custom createTestServer() function adapts Hono fetch API for supertest
+- beforeEach hook cleans database tables and test uploads
+- afterAll hook restores environment and closes database connection
+- Tests run sequentially (fileParallelism: false) to avoid conflicts
+
+## Test Coverage
+### Health API
+- GET /healthz returns status 200 with ok=true
+
+### Podcasts API (Public)
+- GET /api/podcasts lists all podcasts
+- Returns empty array when no podcasts exist
+
+### Podcasts API (Admin)
+- POST /admin/podcasts creates podcasts with validation
+- GET /admin/podcasts lists all podcasts (authenticated)
+- GET /admin/podcasts/:id gets specific podcast
+- PUT /admin/podcasts/:id updates podcast fields
+- DELETE /admin/podcasts/:id deletes podcast
+- All endpoints require valid API key authentication
+
+### Episodes API (Public)
+- GET /api/podcasts/:id/episodes lists published episodes
+- GET /api/episodes/:id gets specific episode
+- Returns 404 for non-existent resources
+
+### Episodes API (Admin)
+- POST /admin/episodes creates episode metadata
+- GET /admin/episodes lists episodes for podcast
+- GET /admin/episodes/:id gets episode details
+- PUT /admin/episodes/:id updates episode (draft only)
+- DELETE /admin/episodes/:id deletes episode
+- POST /admin/episodes/:id/publish publishes ready episodes
+
+## Files Created
+- backend/vitest.config.ts
+- backend/tests/setup.ts
+- backend/tests/health.test.ts
+- backend/tests/podcasts.test.ts
+- backend/tests/episodes.test.ts
+
+## Files Modified
+- backend/src/index.ts (added export { app })
+- backend/package.json (added test script)

@@ -10,7 +10,7 @@ module.exports = {
   apps: [
     {
       name: "fiber-audio-backend",
-      script: "./backend/dist/index.js",
+      script: "./backend/dist/server.js",
       cwd: "./",
       instances: 1,
       exec_mode: "fork",
@@ -18,7 +18,9 @@ module.exports = {
         NODE_ENV: "production",
         PORT: 8787,
       },
-      // add additional environment vars here
+      // Load environment variables from .env file
+      // Make sure to create backend/.env with required variables
+      env_file: "./backend/.env",
     },
   ],
 };

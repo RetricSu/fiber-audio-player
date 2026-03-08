@@ -4,24 +4,31 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "dev:app": "tsx watch src/index.ts",
+    "dev": "tsx watch src/server.ts",
+    "dev:app": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "build:app": "tsc -p tsconfig.json",
-    "start": "node dist/index.js",
+    "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "typecheck:app": "tsc --noEmit"
+    "typecheck:app": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@fiber-pay/sdk": "0.1.0-rc.5",
     "@hono/node-server": "^1.19.4",
     "@noble/hashes": "^2.0.1",
+    "better-sqlite3": "^12.6.2",
     "dotenv": "^17.3.1",
-    "hono": "^4.9.7"
+    "hono": "^4.9.7",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.19.11",
+    "@types/supertest": "^7.2.0",
+    "supertest": "^7.2.2",
     "tsx": "^4.20.5",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vitest": "^4.0.18"
   }
 }

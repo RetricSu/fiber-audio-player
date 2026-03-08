@@ -12,7 +12,7 @@ WorkingDirectory=%PROJECT_ROOT%/backend
 ExecStartPre=/bin/bash -c 'cd %PROJECT_ROOT% && pnpm install && pnpm build:api'
 
 # Start the application
-ExecStart=/usr/bin/node %PROJECT_ROOT%/backend/dist/index.js
+ExecStart=/usr/bin/node %PROJECT_ROOT%/backend/dist/server.js
 
 # Restart policy
 Restart=on-failure
