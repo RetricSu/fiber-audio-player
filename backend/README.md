@@ -31,11 +31,17 @@ See [`scripts/systemd/README.md`](../scripts/systemd/README.md) for full instruc
 
 If you prefer to use PM2 instead of systemd, refer to [`scripts/pm2/README.md`](../scripts/pm2/README.md) for installation, ecosystem configuration, and management steps.
 
-## HLS preparation
+## Audio Upload and Streaming
 
-The backend serves HLS segments and playlists. Before deploying, make sure you have prepared the HLS content as described in the project documentation:
+The backend handles audio uploads and automatic HLS transcoding:
 
-- See [docs/prepare-hls](../docs/hls-manual-setup.md) for step-by-step guidance on generating and hosting the `media/hls` playlist and segments.
+1. **Upload**: Admin users upload audio files (MP3, WAV, OGG, AAC) via API
+2. **Transcode**: Backend automatically transcodes to HLS format using FFmpeg
+3. **Stream**: Encrypted HLS content served through authenticated endpoints
+
+See [docs/hls-streaming.md](../docs/hls-streaming.md) for details.
+
+No manual HLS preparation needed — everything is handled automatically by the backend.
 
 ## Testing
 
