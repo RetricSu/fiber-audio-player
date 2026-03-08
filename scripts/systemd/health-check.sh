@@ -79,7 +79,7 @@ check_service_enabled() {
 check_process() {
     echo ""
     echo "Process:"
-    local pid=$(pgrep -f "node.*dist/index.js" | head -1)
+    local pid=$(pgrep -f "node.*dist/server.js" | head -1)
     if [[ -n "$pid" ]]; then
         local cpu=$(ps -p "$pid" -o %cpu= 2>/dev/null | tr -d ' ')
         local mem=$(ps -p "$pid" -o %mem= 2>/dev/null | tr -d ' ')
