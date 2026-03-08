@@ -2,6 +2,8 @@
 
 This guide walks you through creating and managing multiple podcasts with episodes using the Fiber Audio Player backend admin API.
 
+You can manage content using either the **CLI** (recommended for most operations) or direct **API calls** (for automation and scripting). See the [CLI Reference](./cli.md) for command-line documentation.
+
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
@@ -30,9 +32,15 @@ Before you begin, ensure you have:
 
 2. **Admin API Key** set in your environment (`ADMIN_API_KEY`)
 
-3. **cURL or HTTP client** (curl, httpie, Postman, etc.)
+3. **CLI installed** (optional but recommended)
+   ```bash
+   cd apps/cli && pnpm build
+   # Or use directly with: npx tsx src/index.ts
+   ```
 
-4. **Audio files** ready for upload (MP3, WAV, OGG, or AAC format)
+4. **cURL or HTTP client** (curl, httpie, Postman, etc.) - only needed if not using CLI
+
+5. **Audio files** ready for upload (MP3, WAV, OGG, or AAC format)
 
 ---
 
@@ -44,7 +52,30 @@ Here's the typical workflow for setting up a podcast with episodes:
 1. Create Podcast → 2. Create Episode → 3. Upload Audio → 4. Wait for Transcoding → 5. Publish
 ```
 
-**Example for one podcast with 3 episodes:**
+### Using the CLI (Recommended)
+
+```bash
+# 1. Authenticate
+fap auth login --api-key "your-admin-api-key"
+
+# 2. Create a podcast
+PODCAST=$(fap podcast create --title "My Podcast" --description "A great podcast" --format json)
+PODCAST_ID=$(echo $PODCAST | jq -r '.id')
+
+# 3. Create episode with upload
+fap episode create \
+  --podcast-id "$PODCAST_ID" \
+  --title "Episode 1" \
+  --description "Introduction" \
+  --file ./episode1.mp3 \
+  --wait
+
+# 4. Publish when ready
+fap episode list --podcast-id "$PODCAST_ID" --status ready
+fap episode publish "episode-id-from-list"
+```
+
+### Using cURL (Alternative)
 
 ```bash
 # Set your API key and base URL
@@ -591,5 +622,37 @@ Once your podcasts and episodes are published:
 4. **Configure production deployment** using the systemd or PM2 guides
 
 See also:
+- [CLI Reference](./cli.md) - Command-line tool for managing content
 - [API Reference](./API.md) - Complete API documentation
 - [HLS Manual Setup](./hls-manual-setup.md) - HLS streaming setup
+
+---
+
+## CLI Alternative
+
+For day-to-day operations, consider using the [CLI](./cli.md) instead of direct API calls:
+
+```bash
+# Login once
+fap auth login --api-key "your-key"
+
+# Manage podcasts interactively
+fap podcast create --interactive
+fap podcast list
+fap podcast get <id> --include-episodes
+
+# Manage episodes with full workflow
+fap episode create \
+  --podcast-id <podcast-id> \
+  --title "Episode 1" \
+  --file ./audio.mp3 \
+  --wait \
+  --publish
+```
+
+The CLI provides:
+- Interactive prompts for data entry
+- Formatted tables and JSON output
+- Automatic retry and error handling
+- Progress indicators for uploads
+- Status polling with `--wait` flag

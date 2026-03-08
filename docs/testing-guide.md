@@ -172,7 +172,31 @@ pnpm dev
 
 ## Step 5: Create Test Content (Optional)
 
-Use admin API to create podcasts and episodes:
+You can create test content using either the **CLI** (faster and easier) or direct **API calls**.
+
+### Option A: Using the CLI (Recommended)
+
+```bash
+# 1. Build and authenticate
+ cd apps/cli && pnpm build
+ fap auth login --api-key "your-secret-key"
+
+ # 2. Create podcast
+ PODCAST=$(fap podcast create --title "Test Podcast" --description "For testing" --format json)
+ PODCAST_ID=$(echo $PODCAST | jq -r '.id')
+
+ # 3. Create episode with audio upload
+ fap episode create \
+   --podcast-id "$PODCAST_ID" \
+   --title "Test Episode" \
+   --description "Test" \
+   --price-per-second 10000 \
+   --file /path/to/audio.mp3 \
+   --wait \
+   --publish
+```
+
+### Option B: Using cURL
 
 ```bash
 API_KEY="your-secret-key"
@@ -202,7 +226,7 @@ curl -X POST "$BASE_URL/admin/episodes/$EPISODE_ID/publish" \
   -H "Authorization: Bearer $API_KEY"
 ```
 
-Or use the [Admin Guide](./admin-guide.md) for detailed instructions.
+See the [CLI Reference](./cli.md) and [Admin Guide](./admin-guide.md) for more details.
 
 ---
 
@@ -304,6 +328,23 @@ curl -X POST http://localhost:8787/api/invoices/claim \
 
 - Verify backend running: `curl http://localhost:8787/healthz`
 - Check `FIBER_RPC_URL` points to correct developer node port
+- With CLI: `fap auth doctor` to diagnose connection issues
+
+### CLI Authentication Errors
+
+**Problem:** "Not authenticated" or "Invalid API key" errors.
+
+**Solution:**
+```bash
+# Check current config
+fap auth config
+
+# Re-authenticate
+fap auth login --api-key "your-key" --backend-url "http://localhost:8787"
+
+# Run diagnostics
+fap auth doctor
+```
 
 ---
 
@@ -332,3 +373,4 @@ curl -X POST http://localhost:8787/api/invoices/claim \
 - [ ] Backend started (`pnpm dev:api`)
 - [ ] Frontend started (`pnpm dev:web`)
 - [ ] Test content created (or existing content available)
+- [ ] CLI authenticated (`fap auth doctor`)
