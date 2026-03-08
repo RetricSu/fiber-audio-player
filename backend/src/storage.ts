@@ -165,6 +165,7 @@ export class StorageService {
    */
   static async upload(
     podcastId: string,
+    episodeId: string,
     fileStream: stream.Readable,
     mimeType: string,
     fileSize: number,
@@ -180,9 +181,6 @@ export class StorageService {
         "FILE_TOO_LARGE",
       );
     }
-
-    // Generate unique episode ID
-    const episodeId = randomUUID();
 
     // Determine file extension
     const extension = MIME_TYPE_EXTENSIONS[mimeType] || ".mp3";
