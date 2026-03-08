@@ -210,7 +210,7 @@ Get all published episodes for a specific podcast.
       "duration": 1800,
       "price_per_second": "10000",
       "status": "published",
-      "hls_url": "/stream/550e8400-e29b-41d4-a716-446655440000/550e8400-e29b-41d4-a716-446655440001/hls/playlist.m3u8",
+      "hls_url": "/stream/hls/playlist.m3u8?token=AUTH_TOKEN",
       "created_at": 1704067200000
     }
   ]
@@ -254,7 +254,7 @@ Get detailed information about a specific published episode.
     "duration": 1800,
     "price_per_second": "10000",
     "status": "published",
-    "hls_url": "/stream/550e8400-e29b-41d4-a716-446655440000/550e8400-e29b-41d4-a716-446655440001/hls/playlist.m3u8",
+    "hls_url": "/stream/hls/playlist.m3u8?token=AUTH_TOKEN",
     "created_at": 1704067200000
   }
 }
