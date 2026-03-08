@@ -292,7 +292,13 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
         }
 
         // Check if we can route payments to this recipient
-        const canRoute = await client.checkPaymentRoute(recipientPubkey, testAmount);
+        let canRoute = false;
+        try {
+          canRoute = await client.checkPaymentRoute(recipientPubkey, testAmount);
+        } catch {
+          // Dry-run failed, but we'll check if we have outbound liquidity below
+          canRoute = false;
+        }
 
         if (canRoute) {
           // Route exists via network, check our total channel balance
@@ -305,10 +311,29 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
           return true;
         }
 
-        // No route available
+        // Dry-run failed, but check if we have outbound liquidity to public nodes
+        // This supports multi-hop routing where recipient may not be in our graph yet
+        const allChannels = await client.listChannels();
+        const readyChannels = allChannels.channels.filter(
+          (ch) => ch.state.state_name === ChannelState.ChannelReady
+        );
+        const totalBalance = readyChannels.reduce(
+          (sum, ch) => sum + BigInt(ch.local_balance),
+          0n
+        );
+
+        if (readyChannels.length > 0 && totalBalance > 0n) {
+          // We have outbound liquidity - allow payment attempt via public routing
+          // The actual payment will succeed if public nodes can route to recipient
+          setAvailableBalance(formatShannon(totalBalance));
+          setChannelStatus('ready');
+          return true;
+        }
+
+        // No route available and no outbound liquidity
         setChannelStatus('no_route');
         setChannelError(
-          'No payment route to recipient. Click "Open Channel" to create a direct channel.'
+          'No outbound liquidity available. Please connect to a public Fiber node (bootnode) first to enable multi-hop payments.'
         );
         return false;
       } catch (err) {

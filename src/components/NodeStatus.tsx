@@ -390,7 +390,7 @@ export function NodeStatus({
                 </button>
               )}
 
-              {onOpenChannel && (channelStatus === 'no_route' || channelStatus === 'error') && (
+              {onOpenChannel && channelStatus === 'no_route' && channelCount === 0 && (
                 <button
                   onClick={onOpenChannel}
                   disabled={shouldDisableOpenChannel}
