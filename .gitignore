@@ -15,12 +15,6 @@
 # production
 /build
 /backend/dist
-/media/hls/*
-!/media/hls/.gitkeep
-
-# source audio can be large and private
-/media/source/*
-!/media/source/.gitkeep
 
 # misc
 .DS_Store
