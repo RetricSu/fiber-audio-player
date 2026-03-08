@@ -48,6 +48,7 @@ next-env.d.ts
 
 # pnpm cache
 /backend/.pnpm-only-built-deps
+/backend/uploads
 
 # sisyphus planning
 .sisyphus/
