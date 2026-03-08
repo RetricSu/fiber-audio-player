@@ -1,0 +1,57 @@
+Task 7: Replace in-memory Maps with database persistence
+============================================================
+
+Date: 2025-03-07
+Status: COMPLETED
+
+Changes Made:
+-------------
+
+1. Removed in-memory Maps (kept claimInFlight for concurrency control):
+   - Removed: holdInvoices Map
+   - Removed: sessions Map  
+   - Removed: streamGrants Map
+   - Kept: claimInFlight Map (concurrency guard, not for persistence)
+
+2. Added database helper functions:
+   - insertStreamSession(session: StreamSession)
+   - getStreamSessionById(sessionId: string)
+   - getStreamSessionByToken(streamToken: string)
+   - updateStreamSession(session: StreamSession)
+   - insertPayment(payment: HoldInvoice)
+   - getPaymentByHash(paymentHash: string)
+   - updatePaymentAsSettled(paymentHash: string)
+
+3. Updated endpoints to use database:
+   
+   POST /sessions/create:
+   - Changed: sessions.set() → insertStreamSession()
+   - Removed: streamGrants.set() (redundant, token is in session)
+   
+   POST /invoices/create:
+   - Changed: sessions.get() → getStreamSessionById()
+   - Changed: holdInvoices.set() → insertPayment()
+   
+   POST /invoices/claim:
+   - Changed: holdInvoices.get() → getPaymentByHash()
+   - Changed: sessions.get() → getStreamSessionById()
+   - Changed: hold.settled = true → updatePaymentAsSettled()
+   - Changed: streamGrants.get()/update → updateStreamSession()
+   
+   GET /stream/hls/:fileName:
+   - Changed: streamGrants.get() → getStreamSessionByToken()
+   - Changed: sessions.get(grant.sessionId) → session (already retrieved)
+
+4. Data persistence achieved:
+   - Sessions persist in stream_sessions table
+   - Payments persist in payments table
+   - Can resume streaming after backend restart
+
+Typecheck Results:
+------------------
+✅ No type errors
+✅ Build successful
+
+Files Modified:
+---------------
+- backend/src/index.ts

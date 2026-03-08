@@ -1,0 +1,57 @@
+Task 9: Create React components for browsing podcasts and episodes
+Status: COMPLETED
+Date: 2026-03-07
+
+Files Created:
+- src/components/EpisodeCard.tsx
+- src/components/EpisodeList.tsx
+- src/components/PodcastList.tsx
+
+Typecheck Results:
+$ pnpm typecheck
+
+> fiber-audio-player@0.1.0 typecheck /Users/retric/Desktop/fiber-audio-player
+> pnpm -r --filter . --filter ./backend typecheck:app
+
+Scope: all 2 workspace projects
+. typecheck:app$ tsc --noEmit
+backend typecheck:app$ tsc --noEmit
+backend typecheck:app: Done
+. typecheck:app: Done
+
+Components Implemented:
+
+1. EpisodeCard.tsx
+   - Displays individual episode with title, description, duration, price
+   - Shows status badge (published/processing)
+   - Selection indicator when active
+   - Hover animations with scale effect
+   - Duration formatted as "Xh Ym" or "Xm"
+
+2. EpisodeList.tsx
+   - Fetches episodes from GET /api/podcasts/:id/episodes
+   - Loading state with spinner animation
+   - Error state with error message display
+   - Empty state when no episodes
+   - Staggered animation on episode cards
+   - Calls onEpisodeSelect when episode clicked
+
+3. PodcastList.tsx
+   - Fetches podcasts from GET /api/podcasts
+   - Loading state with spinner animation
+   - Error state with error message display
+   - Empty state when no podcasts
+   - Podcast selection with visual indicator
+   - Staggered animation on podcast items
+   - Calls onPodcastSelect when podcast clicked
+
+Features:
+- All components use TypeScript with proper interfaces
+- Styled with Tailwind CSS using custom fiber color palette
+- Motion animations for smooth transitions
+- Responsive design
+- Proper error handling and loading states
+- Components are exported for use in page.tsx
+
+Backend URL:
+- Uses process.env.NEXT_PUBLIC_BACKEND_BASE_URL || 'http://localhost:8787'

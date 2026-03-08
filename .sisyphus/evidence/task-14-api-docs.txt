@@ -1,0 +1,47 @@
+Task 14: Create comprehensive API documentation
+Completed: $(date)
+
+## File Created
+- backend/API.md - Complete API documentation
+
+## Documentation Coverage
+
+### Admin Endpoints (require ADMIN_API_KEY)
+- POST /admin/podcasts - Create podcast
+- GET /admin/podcasts - List all podcasts
+- GET /admin/podcasts/:id - Get podcast details
+- PUT /admin/podcasts/:id - Update podcast
+- DELETE /admin/podcasts/:id - Delete podcast
+- POST /admin/episodes - Create episode
+- POST /admin/episodes/:id/upload - Upload audio file
+- GET /admin/episodes - List episodes for podcast
+- GET /admin/episodes/:id - Get episode details
+- PUT /admin/episodes/:id - Update episode
+- DELETE /admin/episodes/:id - Delete episode
+- POST /admin/episodes/:id/publish - Publish episode
+
+### Public Endpoints (no auth)
+- GET /healthz - Health check
+- GET /node-info - Get Fiber node info
+- GET /api/podcasts - List published podcasts
+- GET /api/podcasts/:id/episodes - List published episodes
+- GET /api/episodes/:id - Get episode details
+
+### Payment Endpoints
+- POST /sessions/create - Create streaming session
+- POST /invoices/create - Create hold invoice
+- POST /invoices/claim - Claim/settle invoice
+
+### Streaming Endpoints
+- GET /stream/hls/:fileName - Stream HLS content
+
+## Documentation Includes
+- Base URL and authentication info
+- All endpoint definitions with HTTP methods
+- Request/response examples for each endpoint
+- Error response formats
+- Field constraints and validation rules
+- HTTP status codes
+- Episode status lifecycle diagram
+- Data type definitions
+- Environment variables reference

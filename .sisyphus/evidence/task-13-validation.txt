@@ -1,0 +1,104 @@
+# Task 13: Input Validation and Error Handling
+
+## Summary
+Successfully added comprehensive error handling and input validation across the backend using Zod for schema validation.
+
+## Changes Made
+
+### 1. Installed Zod Dependency
+- Added `zod@4.3.6` to backend dependencies
+
+### 2. Created validation.ts
+Location: `backend/src/validation.ts`
+
+Schemas created:
+- `createPodcastSchema`: title (1-255 chars), description (max 1000)
+- `updatePodcastSchema`: optional title and description
+- `createEpisodeSchema`: podcast_id (UUID), title, description, price_per_second
+- `updateEpisodeSchema`: optional title, description, price_per_second
+- `createSessionSchema`: episodeId (UUID)
+- `createInvoiceSchema`: sessionId (UUID), seconds (1-3600)
+- `claimInvoiceSchema`: paymentHash (required)
+
+Helper functions:
+- `validateBody(c, schema)`: Async validation for request body
+- `validateQuery(query, schema)`: Validation for query parameters
+- `validateParams(params, schema)`: Validation for route parameters
+- `validateAudioFile(file)`: File type and size validation
+- `createErrorResponse(error, details)`: Standardized error response format
+
+File upload constants:
+- `ALLOWED_AUDIO_TYPES`: ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/aac']
+- `MAX_FILE_SIZE`: 500MB
+
+### 3. Updated API Endpoints
+
+#### POST /admin/podcasts
+- Uses `createPodcastSchema` for validation
+- Returns 400 with detailed error messages
+
+#### PUT /admin/podcasts/:id
+- Uses `updatePodcastSchema` for validation
+- Checks for empty update requests
+
+#### POST /admin/episodes
+- Uses `createEpisodeSchema` for validation
+- Validates podcast_id is a valid UUID
+
+#### PUT /admin/episodes/:id
+- Uses `updateEpisodeSchema` for validation
+- Checks for empty update requests
+
+#### POST /admin/episodes/:id/upload
+- Uses `validateAudioFile()` for file validation
+- Validates file type and size (500MB max)
+
+#### POST /sessions/create
+- Uses `createSessionSchema` for validation
+- Validates episodeId format (UUID)
+
+#### POST /invoices/create
+- Uses `createInvoiceSchema` for validation
+- Validates sessionId (UUID) and seconds range (1-3600)
+
+#### POST /invoices/claim
+- Uses `claimInvoiceSchema` for validation
+- Validates paymentHash presence
+
+### 4. Request Size Limits
+Added middleware in `index.ts`:
+- JSON body limit: 10MB
+- Upload body limit: 500MB
+- Returns 413 Payload Too Large for oversized requests
+
+### 5. Standardized Error Responses
+All validation errors return:
+```json
+{
+  "ok": false,
+  "error": "field: error message",
+  "details": [/* optional Zod issue details */]
+}
+```
+
+## Verification
+
+### Typecheck Results
+```
+$ pnpm typecheck
+> fiber-audio-player-backend@0.1.0 typecheck
+> tsc --noEmit
+
+✅ No errors
+```
+
+## Files Modified
+- `backend/package.json` - Added zod dependency
+- `backend/src/validation.ts` - New file with all schemas
+- `backend/src/index.ts` - Updated all endpoints with validation
+
+## Notes
+- Zod v4 API uses `issues` instead of `errors` on ZodError
+- All existing API contracts preserved
+- Existing error handling enhanced, not replaced
+- File upload validation includes type and size checks
