@@ -1176,10 +1176,10 @@ app.post('/admin/episodes/:id/upload', async (c) => {
 
     const validatedFile = fileValidation.file!
 
-    // Convert File to stream
-    const fileBuffer = Buffer.from(await validatedFile.arrayBuffer())
+    // Convert File to stream (streaming to avoid memory issues with large files)
     const { Readable } = await import('node:stream')
-    const fileStream = Readable.from(fileBuffer)
+    const webStream = validatedFile.stream()
+    const fileStream = Readable.fromWeb(webStream as any)
 
     // Upload file to storage
     const result = await StorageService.upload(
