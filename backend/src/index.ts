@@ -26,8 +26,6 @@ import {
   createSessionSchema,
   createInvoiceSchema,
   claimInvoiceSchema,
-  uuidParamSchema,
-  type ErrorResponse,
 } from './validation.js'
 
 const app = new Hono()

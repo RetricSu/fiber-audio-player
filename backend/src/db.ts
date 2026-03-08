@@ -23,13 +23,11 @@ class DatabaseManager {
       DatabaseManager.instance = new DatabaseConstructor(DB_PATH);
       DatabaseManager.instance.pragma("journal_mode = WAL");
       DatabaseManager.instance.pragma("foreign_keys = ON");
-
-      DatabaseManager.initializeSchema();
     }
     return DatabaseManager.instance;
   }
 
-  private static initializeSchema(): void {
+  static ensureIndexes(): void {
     const db = DatabaseManager.instance!;
 
     // Schema is managed via migrations in migrations/ directory
@@ -114,9 +112,18 @@ export async function initDb(): Promise<void> {
   // Then run migrations
   const { runMigrations } = await import("./migrations.js");
   await runMigrations();
+  // Keep index creation idempotent and ensure it runs after tables exist
+  DatabaseManager.ensureIndexes();
 }
 
-// For backward compatibility during transition - deprecated
-export const db = DatabaseManager.getInstance();
+// For backward compatibility during transition - deprecated.
+// Lazily resolve to avoid opening DB during module import.
+export const db = new Proxy({} as Database, {
+  get(_target, prop, receiver) {
+    const instance = DatabaseManager.getInstance();
+    const value = Reflect.get(instance as unknown as object, prop, receiver);
+    return typeof value === "function" ? value.bind(instance) : value;
+  },
+}) as Database;
 
 export default getDb;
