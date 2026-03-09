@@ -46,8 +46,6 @@ git checkout improve-backend
 
 # 安装依赖
 pnpm install
-cd backend && pnpm install && cd ..
-cd apps/cli && pnpm install && cd ../..
 pnpm build
 ```
 
@@ -95,13 +93,13 @@ fiber-pay channel open --peer-id QmXen3eUHhywmutEzydCsW4hXBoeVmdET2FJvMX69XJ1Eo 
 ### 5. 部署后端服务
 
 ```bash
-# 使用 systemd
-./scripts/systemd/install.sh
-systemctl status fiber-audio-backend
-
-# 或使用 PM2
+# 使用 PM2(推荐)
 ./scripts/pm2/install.sh
 pm2 status fiber-audio-backend
+
+# 或使用 systemd
+./scripts/systemd/install.sh
+systemctl status fiber-audio-backend
 ```
 
 ### 6. fap CLI 配置
@@ -109,12 +107,16 @@ pm2 status fiber-audio-backend
 ```bash
 cd apps/cli
 pnpm build
+pnpm link --global
+
+# fap 可用
+fap -h
 
 # 登录
-./bin/fap login --api-key "YOUR_API_KEY" --backend-url "http://localhost:8787"
+fap login --api-key "YOUR_API_KEY" --backend-url "http://localhost:8787"
 
 # 验证
-./bin/fap doctor
+fap doctor
 ```
 
 ## 日常运维
@@ -140,10 +142,10 @@ journalctl -u fiber-audio-backend --since "24 hours ago" | grep -i error
 
 ```bash
 # 创建播客
-./apps/cli/bin/fap podcast create --title "播客名称" --description "描述"
+fap podcast create --title "播客名称" --description "描述"
 
 # 上传剧集
-./apps/cli/bin/fap episode create \
+fap episode create \
   --podcast-id "PODCAST_ID" \
   --title "第1集" \
   --file ./audio.mp3 \
@@ -151,8 +153,8 @@ journalctl -u fiber-audio-backend --since "24 hours ago" | grep -i error
   --publish
 
 # 列出现有内容
-./apps/cli/bin/fap podcast list
-./apps/cli/bin/fap episode list --podcast-id "PODCAST_ID"
+fap podcast list
+fap episode list --podcast-id "PODCAST_ID"
 ```
 
 ## 故障排除
@@ -161,6 +163,8 @@ journalctl -u fiber-audio-backend --since "24 hours ago" | grep -i error
 
 ```bash
 # 检查日志
+pm2 logs fiber-audio-backend
+# 或者
 journalctl -u fiber-audio-backend --lines 100
 
 # 检查端口占用
@@ -191,7 +195,7 @@ fiber-pay channel list
 fiber-pay invoice create --amount 100 --description "测试"
 
 # 检查余额
-fiber-pay wallet balance
+fiber-pay channel list --json
 ```
 
 ## 紧急程序
@@ -200,19 +204,19 @@ fiber-pay wallet balance
 
 ```bash
 #!/bin/bash
-systemctl stop fiber-audio-backend
+pm2 stop fiber-audio-backend # systemctl stop fiber-audio-backend
 fiber-pay node stop
 sleep 10
 fiber-pay node start --daemon
 sleep 30
-systemctl start fiber-audio-backend
+pm2 start fiber-audio-backend #systemctl start fiber-audio-backend
 ```
 
 ### 数据库恢复
 
 ```bash
 # 停止服务
-systemctl stop fiber-audio-backend
+pm2 stop fiber-audio-backend # systemctl stop fiber-audio-backend
 
 # 备份损坏的数据库
 mv backend/data/podcast.db backend/data/podcast.db.corrupted
@@ -222,30 +226,30 @@ LATEST=$(ls -t /backups/podcast-*.db | head -1)
 cp "$LATEST" backend/data/podcast.db
 
 # 启动服务
-systemctl start fiber-audio-backend
+pm2 start fiber-audio-backend #systemctl start fiber-audio-backend
 ```
 
 ## 快速参考
 
 ### 状态检查
 ```bash
-systemctl status fiber-audio-backend
+pm2 status fiber-audio-backend #systemctl status fiber-audio-backend
 fiber-pay node info
-./apps/cli/bin/fap doctor
+fap doctor
 curl http://localhost:8787/healthz
 ```
 
 ### 内容操作
 ```bash
-./apps/cli/bin/fap podcast create --title "名称" --description "描述"
-./apps/cli/bin/fap episode create --podcast-id "ID" --title "标题" --file audio.mp3 --publish
-./apps/cli/bin/fap episode list --podcast-id "ID"
+fap podcast create --title "名称" --description "描述"
+fap episode create --podcast-id "ID" --title "标题" --file audio.mp3 --publish
+fap episode list --podcast-id "ID"
 ```
 
 ### 节点操作
 ```bash
 fiber-pay node info
-fiber-pay wallet balance
+fiber-pay node network
 fiber-pay channel list
 fiber-pay peer list
 ```
