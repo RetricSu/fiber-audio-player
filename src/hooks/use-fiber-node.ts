@@ -286,7 +286,14 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
         const client = clientRef.current;
         const testAmount = toHex(ckbToShannon(amount));
 
-        await ensureBootnodePeerConnected();
+        const bootnodePeerId = await ensureBootnodePeerConnected();
+        if (bootnodeMultiaddr && !bootnodePeerId) {
+          setChannelStatus('no_route');
+          setChannelError(
+            'Cannot connect to the public bootnode. Check NEXT_PUBLIC_BOOTNODE_MULTIADDR and make sure the node is reachable.'
+          );
+          return false;
+        }
 
         // First check for direct ready channel to this recipient.
         // This avoids false negatives when dry-run behavior differs by runtime/proxy mode.
@@ -321,29 +328,10 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
           return true;
         }
 
-        // Dry-run failed, but check if we have outbound liquidity to public nodes
-        // This supports multi-hop routing where recipient may not be in our graph yet
-        const allChannels = await client.listChannels();
-        const readyChannels = allChannels.channels.filter(
-          (ch) => ch.state.state_name === ChannelState.ChannelReady
-        );
-        const totalBalance = readyChannels.reduce(
-          (sum, ch) => sum + BigInt(ch.local_balance),
-          0n
-        );
-
-        if (readyChannels.length > 0 && totalBalance > 0n) {
-          // We have outbound liquidity - allow payment attempt via public routing
-          // The actual payment will succeed if public nodes can route to recipient
-          setAvailableBalance(formatShannon(totalBalance));
-          setChannelStatus('ready');
-          return true;
-        }
-
-        // No route available and no outbound liquidity
+        // No route available to recipient
         setChannelStatus('no_route');
         setChannelError(
-          'No outbound liquidity available. Please connect to a public Fiber node (bootnode) first to enable multi-hop payments.'
+          'No payment route found to recipient node. Ensure the recipient is reachable from the public network and retry after channel gossip sync.'
         );
         return false;
       } catch (err) {
@@ -353,7 +341,7 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
         return false;
       }
     },
-    [clearChannelTimer, ensureBootnodePeerConnected]
+    [bootnodeMultiaddr, clearChannelTimer, ensureBootnodePeerConnected]
   );
 
   const cancelChannelSetup = useCallback(() => {
