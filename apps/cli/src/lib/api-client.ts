@@ -206,6 +206,14 @@ export class AdminApiClient {
     return response.data;
   }
 
+  /**
+   * Unpublish an episode
+   */
+  async unpublishEpisode(id: string): Promise<EpisodeResponse> {
+    const response = await this.client.post<EpisodeResponse>(`/admin/episodes/${id}/unpublish`);
+    return response.data;
+  }
+
   // ============================================================================
   // Polling
   // ============================================================================

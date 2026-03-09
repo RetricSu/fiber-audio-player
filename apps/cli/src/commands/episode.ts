@@ -354,53 +354,17 @@ export function createEpisodeCommands(): Command {
         const client = await createClient();
 
         spinner.start('Unpublishing episode...');
-        
-        // Use updateEpisode to change status back to 'ready'
-        // Note: The backend API doesn't have a dedicated unpublish endpoint,
-        // so we use the update endpoint to change the status
-        const episode = await client.getEpisode(id);
-        
-        if (episode.status !== 'published') {
-          spinner.fail(`Episode is not published (status: ${episode.status})`);
-          process.exit(1);
-        }
-
-        // Call the backend unpublish endpoint via a PUT request
-        // Since there's no direct API method, we make a custom request
-        const configManager = new ConfigManager();
-        const config = await configManager.load();
-        
-        const { default: axios } = await import('axios');
-        await axios.post(
-          `${config.apiUrl}/admin/episodes/${id}/unpublish`,
-          {},
-          {
-            headers: {
-              'Authorization': `Bearer ${config.apiToken}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
-        
+        const result = await client.unpublishEpisode(id);
         spinner.succeed('Episode unpublished');
 
         console.log();
         console.log(chalk.green('✓ Unpublished successfully:'));
-        console.log(`  ID: ${id}`);
-        console.log(`  Status: ready`);
+        console.log(`  ID: ${result.episode.id}`);
+        console.log(`  Title: ${result.episode.title}`);
+        console.log(`  Status: ${result.episode.status}`);
       } catch (error) {
         spinner.stop();
-        
-        if (error instanceof ApiError) {
-          handleError(error);
-        } else if (axios.isAxiosError(error) && error.response?.status === 404) {
-          // Endpoint doesn't exist, provide helpful message
-          console.error(chalk.red('\nError: The unpublish endpoint is not available on this backend.'));
-          console.error(chalk.yellow('Please update your backend to support unpublishing episodes.'));
-          process.exit(1);
-        } else {
-          handleError(error);
-        }
+        handleError(error);
       }
     });
 
@@ -531,6 +495,3 @@ export function createEpisodeCommands(): Command {
 
   return episode;
 }
-
-// Import axios for unpublish
-import axios from 'axios';
