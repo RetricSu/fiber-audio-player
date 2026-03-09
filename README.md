@@ -1,202 +1,154 @@
 # Fiber Audio Player
 
-A demo podcast player integrated with the Fiber Network (CKB Lightning Network) for streaming micropayments.
+A self-hosted podcast platform with streaming micropayments via Fiber Network (CKB Lightning Network). Creators maintain full ownership of their content and audience relationships while receiving direct payments from listeners.
 
 ## Overview
 
-This demo showcases how content creators can monetize their podcasts using Fiber Network's payment channels. Listeners pay only for what they actually listen to, with payments streamed in real-time as the audio plays.
-
-### How It Works
-
-1. **Payment Channels**: Fiber Network uses payment channels similar to Bitcoin's Lightning Network but built on CKB (Nervos Network)
-2. **Streaming Payments**: As audio plays, micropayments are automatically sent to the content creator using keysend
-3. **Pay-per-second**: The player charges a configurable rate per second of audio playback
-4. **Instant Settlement**: Payments settle through pre-established payment channels with ~20ms latency
+Fiber Audio Player enables content creators to monetize their podcasts through peer-to-peer payment channels. Listeners pay only for what they actually listen to, with payments streamed in real-time as the audio plays. Unlike platform-dependent solutions, you own the entire stack—content, payments, and infrastructure.
 
 ### Key Features
 
-- 🎵 Full-featured audio player with waveform visualization
-- 💸 Real-time streaming payments via Fiber Network
-- 📊 Live payment history and flow visualization
-- ⚡ Keysend support (spontaneous payments without invoices)
-- 🔧 Configurable payment rates and intervals
+- 🎵 **Full-featured audio player** with waveform visualization
+- 💸 **Streaming micropayments** via Fiber Network payment channels
+- 📊 **Live payment history** and analytics dashboard
+- ⚡ **Keysend support** for spontaneous tips without invoices
+- 🔧 **Self-hosted infrastructure** with complete data sovereignty
+- 🤖 **Agent-ready** - integrate AI agents for autonomous operations
+- 🛠️ **CLI tools** for content management and deployment
 
-## Workspace Layout
-
-This repository is now a `pnpm workspace` with:
-
-- `.` (root): Next.js frontend
-- `backend`: Hono TypeScript API server
-
-## Progressive Server-side Authorization (Current Stage)
-
-- Payment verification endpoint is implemented as **dummy agree** for now.
-- Backend issues short-lived stream authorization tokens based on approved seconds.
-- Encrypted HLS generation is done manually by a local script (not by backend runtime).
-
-See full setup guide: `docs/hls-manual-setup.md`
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- pnpm
-- (Optional) A running Fiber Network node for live payments
-
-### Installation
+## Quick Start
 
 ```bash
 # Install dependencies
 pnpm install
 
-# Run frontend + backend together
+# Run complete stack (frontend + backend)
 pnpm dev
 
-# Run only frontend
-pnpm dev:web
-
-# Run only backend
-pnpm dev:api
-
-# Build for production
-pnpm build
-
-# Type check frontend + backend
-pnpm typecheck
+# Or run individually
+pnpm dev:web    # Frontend only
+pnpm dev:api    # Backend only
 ```
 
-### Configuration
+For detailed setup instructions, see [docs/admin-guide.md](docs/admin-guide.md).
 
-**For podcast deployers**, set the recipient pubkey in `.env.local`:
+## Project Structure
+
+This is a `pnpm workspace` monorepo:
+
+```
+.
+├── src/                    # Next.js frontend (web player)
+├── backend/               # Hono API server (payment & auth)
+├── apps/cli/             # CLI tool for content management
+├── docs/                 # Documentation
+└── scripts/              # Deployment & utility scripts
+```
+
+### Components
+
+| Package | Description | Path |
+|---------|-------------|------|
+| **Web Player** | Next.js frontend with audio player UI | `src/` |
+| **API Server** | Hono backend for payments & streaming auth | `backend/` |
+| **CLI** | Command-line tool for podcast management | `apps/cli/` |
+
+## Documentation
+
+- **[Admin Guide](docs/admin-guide.md)** - Complete setup and deployment instructions
+- **[API Documentation](docs/API.md)** - Backend API reference
+- **[CLI Guide](docs/cli.md)** - Command-line tool usage
+- **[DevOps Manual](docs/devops-manual.md)** - Production deployment with PM2, FFmpeg, SSL
+- **[Testing Guide](docs/testing-guide.md)** - Development and testing workflows
+- **[Self-Hosted Content Creation](docs/self-hosted-content-creation.md)** - Architecture vision for agent-operated platforms
+
+## CLI Tool
+
+The `fap` CLI simplifies podcast management:
 
 ```bash
-# Copy the example env file
-cp .env.local.example .env.local
+# Install CLI
+pnpm build:app
 
-# Edit .env.local and set your Fiber node pubkey
+# Upload episode
+fap episodes upload ./my-episode.mp3 --title "Episode Title"
+
+# List episodes
+fap episodes list
+
+# Check transcoding status
+fap transcode status --id <episode-id>
+```
+
+See [docs/cli.md](docs/cli.md) for full CLI documentation.
+
+## Configuration
+
+### Environment Variables
+
+Copy `.env.local.example` to `.env.local` and configure:
+
+```bash
+# Required: Your Fiber node pubkey for receiving payments
 NEXT_PUBLIC_RECIPIENT_PUBKEY=03abc...your_pubkey_hex
 
-# Optional but recommended: recipient node multiaddr for frontend auto-bootstrap
-# (helps listeners whose local node has no bootnode peers yet)
+# Optional: Multiaddr for listener auto-bootstrap
 NEXT_PUBLIC_RECIPIENT_MULTIADDR=/ip4/127.0.0.1/tcp/8228/p2p/Qm...
 
-# Optional: payment tick interval in milliseconds (default 10000 = 10 seconds)
-NEXT_PUBLIC_PAYMENT_INTERVAL_MS=10000
-
-# Optional: backend URL for payment verify + stream authorization
+# Optional: Backend URL
 NEXT_PUBLIC_BACKEND_BASE_URL=http://localhost:8787
 
-# Optional: requested playback window for authorization (seconds)
-NEXT_PUBLIC_STREAM_REQUESTED_SECONDS=30
+# Optional: Payment interval (default: 10 seconds)
+NEXT_PUBLIC_PAYMENT_INTERVAL_MS=10000
 ```
 
-**For listeners**, configure your Fiber node RPC URL in the app UI (default: `http://127.0.0.1:8229`).
+## How It Works
 
-## Fiber Network RPC Integration
+1. **Content Upload**: Creator uploads audio via CLI or admin interface
+2. **Transcoding**: Backend processes audio into HLS streams with multiple qualities
+3. **Payment Channel**: Listeners open Fiber Network payment channel to creator's node
+4. **Streaming**: Audio plays while payments stream in real-time via keysend
+5. **Authorization**: Backend verifies payments and issues streaming tokens
 
-The player uses the following Fiber RPC methods:
+## Tech Stack
 
-### `node_info`
-Get information about the connected Fiber node.
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "node_info",
-  "params": [{}],
-  "id": 1
-}
-```
-
-### `list_channels`
-List all payment channels.
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "list_channels",
-  "params": [{}],
-  "id": 1
-}
-```
-
-### `send_payment` (Keysend)
-Send a spontaneous payment without an invoice.
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "send_payment",
-  "params": [{
-    "target_pubkey": "03...",
-    "amount": "0x2710",
-    "keysend": true
-  }],
-  "id": 1
-}
-```
-
-### `get_payment`
-Check payment status.
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "get_payment",
-  "params": [{
-    "payment_hash": "0x..."
-  }],
-  "id": 1
-}
-```
+- **Frontend**: Next.js 15, React 19, TypeScript, Tailwind CSS, Motion
+- **Backend**: Hono, TypeScript, FFmpeg (for transcoding)
+- **CLI**: Node.js, Commander.js
+- **Payments**: Fiber Network (CKB Lightning Network)
+- **Deployment**: PM2, systemd, Vercel-ready
 
 ## Architecture
 
 ```
-src/
-├── app/                    # Next.js app router
-│   ├── globals.css        # Global styles with Tailwind
-│   ├── layout.tsx         # Root layout
-│   └── page.tsx           # Main page
-├── components/
-│   ├── AudioPlayer.tsx    # Main audio player component
-│   ├── WaveformVisualizer.tsx
-│   ├── PaymentFlowVisualizer.tsx
-│   ├── NodeStatus.tsx     # Fiber node connection status
-│   └── PaymentHistory.tsx # Payment transaction log
-├── hooks/
-│   ├── use-audio-player.ts
-│   ├── use-fiber-node.ts
-│   └── use-streaming-payment.ts
-└── lib/
-    ├── fiber-rpc.ts       # Fiber RPC client
-    └── streaming-payment.ts # Payment streaming service
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│   Web Player    │────▶│   API Server     │────▶│  Fiber Network  │
+│   (Next.js)     │     │   (Hono)         │     │   (Payments)    │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+                               │
+                               ▼
+                        ┌──────────────────┐
+                        │  HLS Streams     │
+                        │  (FFmpeg)        │
+                        └──────────────────┘
 ```
 
-## Payment Flow
+## Use Cases
 
-1. User clicks play → Audio starts
-2. `StreamingPaymentService` starts tracking playback time
-3. Every 10 seconds by default (configurable), accumulated time is calculated
-4. Keysend payment is sent via Fiber RPC for the listened duration
-5. Payment status is tracked and displayed in the UI
-6. User clicks pause → Payment streaming stops
-
-## Tech Stack
-
-- **Next.js 15** - React framework with App Router
-- **TypeScript** - Type safety
-- **Tailwind CSS** - Styling
-- **Motion** - Animations
-- **Fiber Network** - CKB Lightning payments
+- **Independent Podcasters** - Own your platform and revenue
+- **Premium Content** - Pay-per-minute or subscription models
+- **Direct Fan Support** - Receive tips without platform fees
+- **Agent-Operated** - AI agents manage infrastructure autonomously
 
 ## Resources
 
-- [Fiber Network Repository](https://github.com/nervosnetwork/fiber)
+- [Fiber Network](https://github.com/nervosnetwork/fiber)
 - [Fiber Light Paper](https://github.com/nervosnetwork/fiber/blob/develop/docs/light-paper.md)
-- [Fiber RPC Documentation](https://github.com/nervosnetwork/fiber/blob/develop/crates/fiber-lib/src/rpc/README.md)
-- [CKB Documentation](https://docs.nervos.org/)
+- [Nervos CKB Documentation](https://docs.nervos.org/)
+
+## Contributing
+
+Contributions welcome! Please see individual package READMEs for development guidelines.
 
 ## License
 
