@@ -88,8 +88,8 @@ export async function getBackendNodeInfo(): Promise<BackendNodeInfo> {
   return res.node
 }
 
-export async function createSession(): Promise<CreateSessionResponse> {
-  return postJson<Record<string, never>, CreateSessionResponse>('/sessions/create', {})
+export async function createSession(episodeId?: string): Promise<CreateSessionResponse> {
+  return postJson<{ episodeId?: string }, CreateSessionResponse>('/sessions/create', episodeId ? { episodeId } : {})
 }
 
 export async function createInvoice(input: CreateInvoiceRequest): Promise<CreateInvoiceResponse> {

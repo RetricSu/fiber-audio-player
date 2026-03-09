@@ -15,12 +15,6 @@
 # production
 /build
 /backend/dist
-/media/hls/*
-!/media/hls/.gitkeep
-
-# source audio can be large and private
-/media/source/*
-!/media/source/.gitkeep
 
 # misc
 .DS_Store
@@ -40,3 +34,17 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# database
+/backend/data/*.db
+/backend/data/*.db-journal
+/backend/data/*.db-*
+
+# pnpm cache
+/backend/.pnpm-only-built-deps
+/backend/uploads
+
+# sisyphus planning
+.sisyphus/
+
+apps/cli/dist

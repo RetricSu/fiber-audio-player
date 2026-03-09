@@ -79,10 +79,11 @@ export class StreamingPaymentService {
    * Start a streaming session. Creates a backend session, then performs the
    * first invoice-pay-claim cycle to unlock the initial batch of segments.
    *
+   * @param episodeId  Optional episode ID to associate with the session
    * @param seconds  Number of seconds to purchase in the first batch
    * @returns The initial stream grant (playlist URL, token, etc.)
    */
-  async startStreaming(seconds: number = 30): Promise<StreamGrant> {
+  async startStreaming(episodeId?: string, seconds: number = 30): Promise<StreamGrant> {
     if (this.startInFlight) {
       return this.startInFlight;
     }
@@ -96,8 +97,8 @@ export class StreamingPaymentService {
     }
 
     this.startInFlight = (async () => {
-      // 1. Create a backend session
-      const sessionRes = await createSession();
+      // 1. Create a backend session with optional episodeId
+      const sessionRes = await createSession(episodeId);
       this.sessionId = sessionRes.session.sessionId;
 
       this.isStreaming = true;
