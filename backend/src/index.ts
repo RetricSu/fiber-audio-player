@@ -1523,6 +1523,69 @@ app.post('/admin/episodes/:id/publish', async (c) => {
   }
 })
 
+// POST /admin/episodes/:id/unpublish - Unpublish episode
+app.post('/admin/episodes/:id/unpublish', async (c) => {
+  const auth = requireAdminAuth(c)
+  if (!auth.ok) {
+    return c.json({ ok: false, error: auth.error }, 401)
+  }
+
+  const id = c.req.param('id')
+
+  try {
+    // Check if episode exists
+    const existing = getDb().prepare(`
+      SELECT id, status FROM episodes WHERE id = ?
+    `).get(id) as { id: string; status: string } | undefined
+
+    if (!existing) {
+      return c.json({ ok: false, error: 'Episode not found' }, 404)
+    }
+
+    // Only allow unpublishing if episode is in 'published' status
+    if (existing.status !== 'published') {
+      return c.json({ ok: false, error: 'Episode is not published' }, 400)
+    }
+
+    // Update status to ready and update updated_at timestamp
+    const now = Math.floor(Date.now() / 1000)
+    getDb().prepare(`
+      UPDATE episodes
+      SET status = 'ready', updated_at = ?
+      WHERE id = ?
+    `).run(now, id)
+
+    // Get updated episode
+    const episode = getDb().prepare(`
+      SELECT id, podcast_id, title, description, duration, storage_path, price_per_second, status, created_at
+      FROM episodes
+      WHERE id = ?
+    `).get(id) as {
+      id: string
+      podcast_id: string
+      title: string
+      description: string | null
+      duration: number | null
+      storage_path: string
+      price_per_second: number
+      status: string
+      created_at: number
+    }
+
+    return c.json({
+      ok: true,
+      episode: {
+        ...episode,
+        price_per_second: episode.price_per_second.toString(),
+      },
+      message: 'Episode unpublished successfully',
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to unpublish episode'
+    return c.json({ ok: false, error: message }, 500)
+  }
+})
+
 // POST /admin/episodes/:id/retry-transcode - Retry transcoding for failed episode
 app.post('/admin/episodes/:id/retry-transcode', async (c) => {
   const auth = requireAdminAuth(c)
