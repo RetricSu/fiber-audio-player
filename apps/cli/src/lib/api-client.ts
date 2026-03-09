@@ -39,6 +39,7 @@ export class AdminApiClient {
         'Authorization': `Bearer ${options.apiToken}`,
         'Content-Type': 'application/json',
       },
+      proxy: false, // Disable proxy to prevent HTTP_PROXY/HTTPS_PROXY from affecting local connections
     });
 
     // Response interceptor for error handling
