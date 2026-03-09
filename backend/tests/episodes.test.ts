@@ -273,7 +273,7 @@ describe('Episodes API', () => {
         server.close()
       })
       
-      it('should allow title/description updates for published episode', async () => {
+      it('should allow title update for published episode', async () => {
         const podcast = await createTestPodcast('Test Podcast')
         const episode = await createTestEpisode(podcast.id, 'Published Episode', { status: 'published' })
         
@@ -282,11 +282,28 @@ describe('Episodes API', () => {
         const response = await request(server)
           .put(`/admin/episodes/${episode.id}`)
           .set('Authorization', `Bearer ${TEST_ADMIN_KEY}`)
-          .send({ title: 'New Title', description: 'New Description' })
+          .send({ title: 'New Title' })
         
         expect(response.status).toBe(200)
         expect(response.body.ok).toBe(true)
         expect(response.body.episode.title).toBe('New Title')
+        
+        server.close()
+      })
+
+      it('should allow description update for published episode', async () => {
+        const podcast = await createTestPodcast('Test Podcast')
+        const episode = await createTestEpisode(podcast.id, 'Published Episode', { status: 'published' })
+        
+        const { app } = await import('../src/index.js')
+        const server = createTestServer(app)
+        const response = await request(server)
+          .put(`/admin/episodes/${episode.id}`)
+          .set('Authorization', `Bearer ${TEST_ADMIN_KEY}`)
+          .send({ description: 'New Description' })
+        
+        expect(response.status).toBe(200)
+        expect(response.body.ok).toBe(true)
         expect(response.body.episode.description).toBe('New Description')
         
         server.close()
@@ -372,7 +389,55 @@ describe('Episodes API', () => {
         server.close()
       })
     })
-    
+
+    describe('POST /admin/episodes/:id/unpublish', () => {
+      it('should unpublish a published episode', async () => {
+        const podcast = await createTestPodcast('Test Podcast')
+        const episode = await createTestEpisode(podcast.id, 'Published Episode', { status: 'published' })
+
+        const { app } = await import('../src/index.js')
+        const server = createTestServer(app)
+        const response = await request(server)
+          .post(`/admin/episodes/${episode.id}/unpublish`)
+          .set('Authorization', `Bearer ${TEST_ADMIN_KEY}`)
+
+        expect(response.status).toBe(200)
+        expect(response.body.ok).toBe(true)
+        expect(response.body.episode.status).toBe('ready')
+
+        server.close()
+      })
+
+      it('should reject unpublishing non-published episode', async () => {
+        const podcast = await createTestPodcast('Test Podcast')
+        const episode = await createTestEpisode(podcast.id, 'Draft Episode', { status: 'draft' })
+
+        const { app } = await import('../src/index.js')
+        const server = createTestServer(app)
+        const response = await request(server)
+          .post(`/admin/episodes/${episode.id}/unpublish`)
+          .set('Authorization', `Bearer ${TEST_ADMIN_KEY}`)
+
+        expect(response.status).toBe(400)
+        expect(response.body.ok).toBe(false)
+
+        server.close()
+      })
+
+      it('should return 404 for non-existent episode on unpublish', async () => {
+        const { app } = await import('../src/index.js')
+        const server = createTestServer(app)
+        const response = await request(server)
+          .post('/admin/episodes/00000000-0000-0000-0000-000000000000/unpublish')
+          .set('Authorization', `Bearer ${TEST_ADMIN_KEY}`)
+
+        expect(response.status).toBe(404)
+        expect(response.body.ok).toBe(false)
+
+        server.close()
+      })
+    })
+
     describe('POST /admin/episodes/:id/status', () => {
       it('should update episode status', async () => {
         const podcast = await createTestPodcast('Test Podcast')
