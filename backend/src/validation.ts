@@ -32,6 +32,10 @@ export const updateEpisodeSchema = z.object({
   price_per_second: z.string().regex(/^\d+$/, 'price_per_second must be a valid number string').optional(),
 })
 
+export const updateEpisodeStatusSchema = z.object({
+  status: z.enum(['draft', 'processing', 'ready', 'failed', 'archived']),
+})
+
 // ============================================================================
 // Payment/Session Schemas
 // ============================================================================
