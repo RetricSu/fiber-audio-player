@@ -19,6 +19,39 @@
 
 ## 部署清单
 
+### 0. 环境准备
+
+系统需要安装以下依赖：
+
+**FFmpeg** (必需，用于音频转码和 HLS 切片)
+
+```bash
+# Ubuntu/Debian
+sudo apt update
+sudo apt install ffmpeg
+
+# macOS
+brew install ffmpeg
+
+# 验证安装
+ffmpeg -version
+```
+
+**Node.js** (>= 18)
+
+```bash
+# 推荐使用 nvm 安装
+nvm install 18
+nvm use 18
+```
+
+**pnpm**
+
+```bash
+# 安装 pnpm
+npm install -g pnpm
+```
+
 ### 1. 环境检查
 
 ```bash
@@ -45,6 +78,7 @@ cd fiber-audio-player
 git checkout improve-backend
 
 # 安装依赖
+# 首次安装时会提示批准 onlyBuiltDependencies，选择 "Yes" 允许
 pnpm install
 pnpm build
 ```
@@ -92,12 +126,29 @@ fiber-pay channel open --peer-id QmXen3eUHhywmutEzydCsW4hXBoeVmdET2FJvMX69XJ1Eo 
 
 ### 5. 部署后端服务
 
+#### 使用 PM2 (推荐)
+
+PM2 配置使用 `node_args` 模式加载环境变量：
+
+```javascript
+// ecosystem.config.js 关键配置
+node_args: "-r dotenv/config",
+env: {
+  DOTENV_CONFIG_PATH: "./backend/.env",
+}
+```
+
+这样可以将环境变量保存在单独的文件中，避免在启动命令中暴露敏感信息。
+
 ```bash
-# 使用 PM2(推荐)
+# 安装并启动服务
 ./scripts/pm2/install.sh
 pm2 status fiber-audio-backend
+```
 
-# 或使用 systemd
+#### 使用 systemd
+
+```bash
 ./scripts/systemd/install.sh
 systemctl status fiber-audio-backend
 ```
@@ -227,6 +278,84 @@ cp "$LATEST" backend/data/podcast.db
 
 # 启动服务
 pm2 start fiber-audio-backend #systemctl start fiber-audio-backend
+```
+
+### 手动转码工作流
+
+当自动转码失败或需要重新转码时，使用以下步骤：
+
+```bash
+# 1. 准备环境
+cd /opt/fiber-audio-player
+source .env
+
+# 2. 确认原始文件存在
+ls -la backend/uploads/${EPISODE_ID}/original.*
+
+# 3. 运行转码脚本
+cd backend
+pnpm ts-node scripts/transcode.ts --episode-id ${EPISODE_ID}
+
+# 4. 验证转码结果
+ls -la uploads/${EPISODE_ID}/hls/
+ls -la uploads/${EPISODE_ID}/encrypted/
+
+# 5. 更新数据库状态
+# 转码完成后，剧集状态会自动更新为 published
+```
+
+转码脚本参数说明：
+
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `--episode-id` | 剧集 ID | 必需 |
+| `--segment-duration` | HLS 片段时长(秒) | 6 |
+| `--output-format` | 输出格式 | hls,aes |
+
+### 剧集恢复程序
+
+当剧集文件损坏或丢失时：
+
+```bash
+# 1. 确定需要恢复的剧集 ID
+fap episode list --podcast-id ${PODCAST_ID}
+
+# 2. 查找原始文件备份
+# 检查以下位置：
+# - /backups/episodes/
+# - 本地备份目录
+# - 上传时的临时目录
+
+# 3. 如果找到原始文件备份
+mkdir -p backend/uploads/${EPISODE_ID}/
+cp /path/to/backup/original.mp3 backend/uploads/${EPISODE_ID}/original.mp3
+
+# 4. 重新运行转码
+pnpm ts-node scripts/transcode.ts --episode-id ${EPISODE_ID}
+
+# 5. 验证恢复结果
+# 检查 HLS 文件是否生成
+ls backend/uploads/${EPISODE_ID}/hls/
+# 应该看到 playlist.m3u8 和多个 .ts 片段文件
+
+# 6. 更新数据库状态（如需要）
+# 使用 CLI 或 API 将状态设为 published
+```
+
+如果原始文件完全丢失：
+
+```bash
+# 1. 标记剧集为失效状态
+fap episode update --episode-id ${EPISODE_ID} --status failed
+
+# 2. 通知播客管理员重新上传
+# 或使用 CLI 重新创建剧集
+fap episode create \
+  --podcast-id ${PODCAST_ID} \
+  --title "${EPISODE_TITLE}" \
+  --file ./new-audio.mp3 \
+  --price-per-second ${PRICE} \
+  --publish
 ```
 
 ## 快速参考
