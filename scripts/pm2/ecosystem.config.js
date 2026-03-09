@@ -14,13 +14,12 @@ module.exports = {
       cwd: "./",
       instances: 1,
       exec_mode: "fork",
+      node_args: "-r dotenv/config",
       env: {
         NODE_ENV: "production",
         PORT: 8787,
+        DOTENV_CONFIG_PATH: "./backend/.env",
       },
-      // Load environment variables from .env file
-      // Make sure to create backend/.env with required variables
-      env_file: "./backend/.env",
     },
   ],
 };

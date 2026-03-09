@@ -2,3 +2,6 @@ packages:
   - .
   - backend
   - apps/cli
+
+onlyBuiltDependencies:
+  - better-sqlite3
