@@ -92,8 +92,8 @@ Copy `.env.local.example` to `.env.local` and configure:
 # Required: Your Fiber node pubkey for receiving payments
 NEXT_PUBLIC_RECIPIENT_PUBKEY=03abc...your_pubkey_hex
 
-# Optional: Multiaddr for listener auto-bootstrap
-NEXT_PUBLIC_RECIPIENT_MULTIADDR=/ip4/127.0.0.1/tcp/8228/p2p/Qm...
+# Optional: Bootnode multiaddr for listener auto-bootstrap
+NEXT_PUBLIC_BOOTNODE_MULTIADDR=/ip4/127.0.0.1/tcp/8228/p2p/Qm...
 
 # Optional: Backend URL
 NEXT_PUBLIC_BACKEND_BASE_URL=http://localhost:8787

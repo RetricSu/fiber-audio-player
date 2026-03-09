@@ -84,7 +84,7 @@ export default function Home() {
 
   const fiberNode = useFiberNode(rpcUrl, {
     recipientPubkey,
-    recipientMultiaddr: BOOTNODE_MULTIADDR,
+    bootnodeMultiaddr: BOOTNODE_MULTIADDR,
   });
 
   const payment = useStreamingPayment({
@@ -135,7 +135,7 @@ export default function Home() {
         recipientPubkey={recipientPubkey}
         recipientMultiaddrConfigured={Boolean(BOOTNODE_MULTIADDR.trim())}
         onCheckRoute={() => fiberNode.checkPaymentRoute(recipientPubkey)}
-        onOpenChannel={() => fiberNode.setupChannel(recipientPubkey)}
+        onOpenChannel={() => fiberNode.setupChannel()}
         onCancelSetup={fiberNode.cancelChannelSetup}
         rpcUrlValue={rpcUrl}
         onRpcUrlChange={setRpcUrl}

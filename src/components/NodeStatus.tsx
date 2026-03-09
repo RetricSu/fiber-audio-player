@@ -294,7 +294,7 @@ export function NodeStatus({
         {recipientPubkey && isConnected && !recipientMultiaddrConfigured && (
           <div className="mt-3 p-3 rounded-lg bg-fiber-warning/10 border border-fiber-warning/30">
             <p className="text-xs text-fiber-warning font-mono">
-              Auto peer bootstrap disabled. Set NEXT_PUBLIC_RECIPIENT_MULTIADDR so users without bootnodes can connect automatically.
+              Auto peer bootstrap disabled. Optionally set NEXT_PUBLIC_BOOTNODE_MULTIADDR so users without preconfigured peers can join the network automatically.
             </p>
           </div>
         )}
