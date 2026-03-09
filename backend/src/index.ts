@@ -1350,9 +1350,9 @@ app.put('/admin/episodes/:id', async (c) => {
       return c.json({ ok: false, error: 'Episode not found' }, 404)
     }
 
-    // Do not allow editing published episodes
-    if (existing.status === 'published') {
-      return c.json({ ok: false, error: 'Cannot edit a published episode' }, 400)
+    // Only block price_per_second edits on published episodes
+    if (existing.status === 'published' && price_per_second !== undefined) {
+      return c.json({ ok: false, error: 'Cannot modify price_per_second on a published episode' }, 400)
     }
 
     // Build update query
@@ -1373,6 +1373,9 @@ app.put('/admin/episodes/:id', async (c) => {
       updates.push('price_per_second = ?')
       params.push(BigInt(price_per_second).toString())
     }
+
+    updates.push('updated_at = ?')
+    params.push(Date.now())
 
     params.push(id)
 
@@ -1530,43 +1533,8 @@ app.post('/admin/episodes/:id/retry-transcode', async (c) => {
   const id = c.req.param('id')
 
   try {
-    // Get episode
+    // Get full episode details once
     const episode = getDb().prepare(`
-      SELECT id, podcast_id, storage_path, status 
-      FROM episodes 
-      WHERE id = ?
-    `).get(id) as { id: string; podcast_id: string; storage_path: string; status: string } | undefined
-
-    if (!episode) {
-      return c.json({ ok: false, error: 'Episode not found' }, 404)
-    }
-
-    // Do not allow retry if already processing
-    if (episode.status === 'processing') {
-      return c.json({ ok: false, error: 'Episode is already being processed' }, 400)
-    }
-
-    // Check source file exists
-    if (!episode.storage_path) {
-      return c.json({ ok: false, error: 'Episode has no source file' }, 400)
-    }
-
-    try {
-      await fs.access(episode.storage_path)
-    } catch {
-      return c.json({ ok: false, error: 'Source file not found' }, 400)
-    }
-
-    // Update status and queue transcoding
-    await transcodeService.updateEpisodeStatus(id, 'processing')
-    await transcodeService.queueTranscodeJob(
-      episode.podcast_id,
-      id,
-      episode.storage_path
-    )
-
-    // Get updated episode
-    const updated = getDb().prepare(`
       SELECT id, podcast_id, title, description, duration, storage_path, price_per_second, status, created_at
       FROM episodes
       WHERE id = ?
@@ -1580,13 +1548,47 @@ app.post('/admin/episodes/:id/retry-transcode', async (c) => {
       price_per_second: number
       status: string
       created_at: number
+    } | undefined
+
+    if (!episode) {
+      return c.json({ ok: false, error: 'Episode not found' }, 404)
     }
+
+    // Only allow retry for failed or archived episodes
+    if (episode.status !== 'failed' && episode.status !== 'archived') {
+      return c.json({
+        ok: false,
+        error: 'Episode status does not allow retry (only failed or archived episodes can be retried)'
+      }, 400)
+    }
+
+    // Check source file exists
+    if (!episode.storage_path) {
+      return c.json({ ok: false, error: 'Episode has no source file' }, 400)
+    }
+
+    try {
+      await fs.access(episode.storage_path)
+    } catch {
+      return c.json({ ok: false, error: 'Source file not found' }, 400)
+    }
+
+    // Queue transcoding first, then update status
+    await transcodeService.queueTranscodeJob(
+      episode.podcast_id,
+      id,
+      episode.storage_path
+    )
+    await transcodeService.updateEpisodeStatus(id, 'processing')
+
+    // Update in-memory object and return
+    episode.status = 'processing'
 
     return c.json({
       ok: true,
       episode: {
-        ...updated,
-        price_per_second: updated.price_per_second.toString(),
+        ...episode,
+        price_per_second: episode.price_per_second.toString(),
       },
       message: 'Transcoding retry queued',
     })
@@ -1614,12 +1616,11 @@ app.post('/admin/episodes/:id/status', async (c) => {
   const { status } = validation.data
 
   try {
-    const existing = getDb().prepare('SELECT id FROM episodes WHERE id = ?').get(id) as { id: string } | undefined
-    if (!existing) {
+    const info = getDb().prepare('UPDATE episodes SET status = ? WHERE id = ?').run(status, id)
+
+    if (info.changes === 0) {
       return c.json({ ok: false, error: 'Episode not found' }, 404)
     }
-
-    getDb().prepare('UPDATE episodes SET status = ? WHERE id = ?').run(status, id)
 
     const episode = getDb().prepare(`
       SELECT id, podcast_id, title, description, duration, storage_path, price_per_second, status, created_at

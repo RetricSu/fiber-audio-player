@@ -273,7 +273,7 @@ describe('Episodes API', () => {
         server.close()
       })
       
-      it('should reject update for published episode', async () => {
+      it('should allow title/description updates for published episode', async () => {
         const podcast = await createTestPodcast('Test Podcast')
         const episode = await createTestEpisode(podcast.id, 'Published Episode', { status: 'published' })
         
@@ -282,10 +282,30 @@ describe('Episodes API', () => {
         const response = await request(server)
           .put(`/admin/episodes/${episode.id}`)
           .set('Authorization', `Bearer ${TEST_ADMIN_KEY}`)
-          .send({ title: 'New Title' })
+          .send({ title: 'New Title', description: 'New Description' })
+        
+        expect(response.status).toBe(200)
+        expect(response.body.ok).toBe(true)
+        expect(response.body.episode.title).toBe('New Title')
+        expect(response.body.episode.description).toBe('New Description')
+        
+        server.close()
+      })
+
+      it('should reject price_per_second update for published episode', async () => {
+        const podcast = await createTestPodcast('Test Podcast')
+        const episode = await createTestEpisode(podcast.id, 'Published Episode', { status: 'published', pricePerSecond: BigInt(100) })
+        
+        const { app } = await import('../src/index.js')
+        const server = createTestServer(app)
+        const response = await request(server)
+          .put(`/admin/episodes/${episode.id}`)
+          .set('Authorization', `Bearer ${TEST_ADMIN_KEY}`)
+          .send({ price_per_second: 200 })
         
         expect(response.status).toBe(400)
         expect(response.body.ok).toBe(false)
+        expect(response.body.error).toContain('price_per_second')
         
         server.close()
       })

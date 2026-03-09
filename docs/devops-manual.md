@@ -287,30 +287,20 @@ pm2 start fiber-audio-backend #systemctl start fiber-audio-backend
 ```bash
 # 1. 准备环境
 cd /opt/fiber-audio-player
-source .env
+source backend/.env
 
-# 2. 确认原始文件存在
-ls -la backend/uploads/${EPISODE_ID}/original.*
+# 2. 确认原始文件存在（注意包含 Podcast ID 目录层级）
+ls -la backend/uploads/${PODCAST_ID}/${EPISODE_ID}/original.*
 
-# 3. 运行转码脚本
-cd backend
-pnpm ts-node scripts/transcode.ts --episode-id ${EPISODE_ID}
+# 3. 使用 API 重试转码
+curl -X POST http://localhost:8787/admin/episodes/${EPISODE_ID}/retry-transcode \
+  -H "Authorization: Bearer ${ADMIN_API_KEY}"
 
 # 4. 验证转码结果
-ls -la uploads/${EPISODE_ID}/hls/
-ls -la uploads/${EPISODE_ID}/encrypted/
+ls -la backend/uploads/${PODCAST_ID}/${EPISODE_ID}/hls/
 
-# 5. 更新数据库状态
-# 转码完成后，剧集状态会自动更新为 published
+# 5. 转码成功后，剧集状态会自动更新为 ready，需通过管理后台或调用 POST /admin/episodes/:id/publish 单独发布
 ```
-
-转码脚本参数说明：
-
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `--episode-id` | 剧集 ID | 必需 |
-| `--segment-duration` | HLS 片段时长(秒) | 6 |
-| `--output-format` | 输出格式 | hls,aes |
 
 ### 剧集恢复程序
 
@@ -326,27 +316,33 @@ fap episode list --podcast-id ${PODCAST_ID}
 # - 本地备份目录
 # - 上传时的临时目录
 
-# 3. 如果找到原始文件备份
-mkdir -p backend/uploads/${EPISODE_ID}/
-cp /path/to/backup/original.mp3 backend/uploads/${EPISODE_ID}/original.mp3
+# 3. 如果找到原始文件备份（注意包含 Podcast ID 目录层级）
+mkdir -p backend/uploads/${PODCAST_ID}/${EPISODE_ID}/
+cp /path/to/backup/original.mp3 backend/uploads/${PODCAST_ID}/${EPISODE_ID}/original.mp3
 
-# 4. 重新运行转码
-pnpm ts-node scripts/transcode.ts --episode-id ${EPISODE_ID}
+# 4. 使用 API 重试转码
+curl -X POST http://localhost:8787/admin/episodes/${EPISODE_ID}/retry-transcode \
+  -H "Authorization: Bearer ${ADMIN_API_KEY}"
 
 # 5. 验证恢复结果
 # 检查 HLS 文件是否生成
-ls backend/uploads/${EPISODE_ID}/hls/
+ls backend/uploads/${PODCAST_ID}/${EPISODE_ID}/hls/
 # 应该看到 playlist.m3u8 和多个 .ts 片段文件
 
 # 6. 更新数据库状态（如需要）
-# 使用 CLI 或 API 将状态设为 published
+# 转码成功后状态自动变为 ready，如需发布使用：
+curl -X POST http://localhost:8787/admin/episodes/${EPISODE_ID}/publish \
+  -H "Authorization: Bearer ${ADMIN_API_KEY}"
 ```
 
 如果原始文件完全丢失：
 
 ```bash
-# 1. 标记剧集为失效状态
-fap episode update --episode-id ${EPISODE_ID} --status failed
+# 1. 标记剧集为失效状态（使用管理 API）
+curl -X POST http://localhost:8787/admin/episodes/${EPISODE_ID}/status \
+  -H "Authorization: Bearer ${ADMIN_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "failed"}'
 
 # 2. 通知播客管理员重新上传
 # 或使用 CLI 重新创建剧集
