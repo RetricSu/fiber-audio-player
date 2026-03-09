@@ -539,8 +539,6 @@ Unpublish an episode (change status from `published` to `ready`).
 fap episode unpublish 550e8400-e29b-41d4-a716-446655440001
 ```
 
-**Note:** Requires backend support for the unpublish endpoint.
-
 ---
 
 #### `fap episode delete`

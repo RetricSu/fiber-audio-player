@@ -868,7 +868,7 @@ Get detailed information about a specific episode.
 
 ### Update Episode
 
-Update episode metadata. Cannot edit published episodes.
+Update episode metadata. For published episodes, only title and description can be edited. price_per_second cannot be changed after publishing.
 
 **PUT** `/admin/episodes/:id`
 
@@ -913,11 +913,11 @@ Update episode metadata. Cannot edit published episodes.
 }
 ```
 
-**Response (400) - Published Episode:**
+**Response (400) - Price Change on Published Episode:**
 ```json
 {
   "ok": false,
-  "error": "Cannot edit a published episode"
+  "error": "Cannot modify price_per_second on a published episode"
 }
 ```
 
@@ -991,6 +991,48 @@ Publish an episode to make it available for streaming. Episode must be in `ready
 {
   "ok": false,
   "error": "Episode has no uploaded file"
+}
+```
+
+---
+
+### Unpublish Episode
+
+Unpublish an episode to change its status from `published` back to `ready`. This allows editing metadata before republishing.
+
+**POST** `/admin/episodes/:id/unpublish`
+
+**Auth Required:** Yes (Bearer token)
+
+**Path Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| id | UUID | Episode ID |
+
+**Response (200):**
+```json
+{
+  "ok": true,
+  "episode": {
+    "id": "550e8400-e29b-41d4-a716-446655440001",
+    "podcast_id": "550e8400-e29b-41d4-a716-446655440000",
+    "title": "Episode 1: Introduction",
+    "description": "Welcome to our first episode",
+    "duration": 1800,
+    "storage_path": "/path/to/uploads/...",
+    "price_per_second": "10000",
+    "status": "ready",
+    "created_at": 1704067200000
+  },
+  "message": "Episode unpublished successfully"
+}
+```
+
+**Response (400) - Not Published:**
+```json
+{
+  "ok": false,
+  "error": "Episode is not published"
 }
 ```
 
