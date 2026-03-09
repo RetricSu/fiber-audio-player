@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import request from 'supertest'
-import { createTestServer, TEST_ADMIN_KEY, createTestPodcast, createTestEpisode } from './utils.js'
+import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
+import { createTestServer, TEST_ADMIN_KEY, createTestPodcast, createTestEpisode, TEST_UPLOADS_DIR } from './utils.js'
 
 describe('Episodes API', () => {
   describe('Public endpoints', () => {
@@ -271,7 +273,7 @@ describe('Episodes API', () => {
         server.close()
       })
       
-      it('should reject update for published episode', async () => {
+      it('should allow title/description updates for published episode', async () => {
         const podcast = await createTestPodcast('Test Podcast')
         const episode = await createTestEpisode(podcast.id, 'Published Episode', { status: 'published' })
         
@@ -280,10 +282,30 @@ describe('Episodes API', () => {
         const response = await request(server)
           .put(`/admin/episodes/${episode.id}`)
           .set('Authorization', `Bearer ${TEST_ADMIN_KEY}`)
-          .send({ title: 'New Title' })
+          .send({ title: 'New Title', description: 'New Description' })
+        
+        expect(response.status).toBe(200)
+        expect(response.body.ok).toBe(true)
+        expect(response.body.episode.title).toBe('New Title')
+        expect(response.body.episode.description).toBe('New Description')
+        
+        server.close()
+      })
+
+      it('should reject price_per_second update for published episode', async () => {
+        const podcast = await createTestPodcast('Test Podcast')
+        const episode = await createTestEpisode(podcast.id, 'Published Episode', { status: 'published', pricePerSecond: BigInt(100) })
+        
+        const { app } = await import('../src/index.js')
+        const server = createTestServer(app)
+        const response = await request(server)
+          .put(`/admin/episodes/${episode.id}`)
+          .set('Authorization', `Bearer ${TEST_ADMIN_KEY}`)
+          .send({ price_per_second: 200 })
         
         expect(response.status).toBe(400)
         expect(response.body.ok).toBe(false)
+        expect(response.body.error).toContain('price_per_second')
         
         server.close()
       })
@@ -342,6 +364,173 @@ describe('Episodes API', () => {
         const server = createTestServer(app)
         const response = await request(server)
           .post(`/admin/episodes/${episode.id}/publish`)
+          .set('Authorization', `Bearer ${TEST_ADMIN_KEY}`)
+        
+        expect(response.status).toBe(400)
+        expect(response.body.ok).toBe(false)
+        
+        server.close()
+      })
+    })
+    
+    describe('POST /admin/episodes/:id/status', () => {
+      it('should update episode status', async () => {
+        const podcast = await createTestPodcast('Test Podcast')
+        const episode = await createTestEpisode(podcast.id, 'Test Episode', { status: 'draft' })
+        
+        const { app } = await import('../src/index.js')
+        const server = createTestServer(app)
+        const response = await request(server)
+          .post(`/admin/episodes/${episode.id}/status`)
+          .set('Authorization', `Bearer ${TEST_ADMIN_KEY}`)
+          .send({ status: 'ready' })
+        
+        expect(response.status).toBe(200)
+        expect(response.body.ok).toBe(true)
+        expect(response.body.episode.status).toBe('ready')
+        
+        server.close()
+      })
+      
+      it('should reject published status', async () => {
+        const podcast = await createTestPodcast('Test Podcast')
+        const episode = await createTestEpisode(podcast.id, 'Test Episode', { status: 'draft' })
+        
+        const { app } = await import('../src/index.js')
+        const server = createTestServer(app)
+        const response = await request(server)
+          .post(`/admin/episodes/${episode.id}/status`)
+          .set('Authorization', `Bearer ${TEST_ADMIN_KEY}`)
+          .send({ status: 'published' })
+        
+        expect(response.status).toBe(400)
+        expect(response.body.ok).toBe(false)
+        
+        server.close()
+      })
+      
+      it('should return 404 for non-existent episode', async () => {
+        const { app } = await import('../src/index.js')
+        const server = createTestServer(app)
+        const response = await request(server)
+          .post('/admin/episodes/00000000-0000-0000-0000-000000000000/status')
+          .set('Authorization', `Bearer ${TEST_ADMIN_KEY}`)
+          .send({ status: 'ready' })
+        
+        expect(response.status).toBe(404)
+        expect(response.body.ok).toBe(false)
+        
+        server.close()
+      })
+      
+      it('should return 400 for invalid status', async () => {
+        const podcast = await createTestPodcast('Test Podcast')
+        const episode = await createTestEpisode(podcast.id, 'Test Episode', { status: 'draft' })
+        
+        const { app } = await import('../src/index.js')
+        const server = createTestServer(app)
+        const response = await request(server)
+          .post(`/admin/episodes/${episode.id}/status`)
+          .set('Authorization', `Bearer ${TEST_ADMIN_KEY}`)
+          .send({ status: 'invalid_status' })
+        
+        expect(response.status).toBe(400)
+        expect(response.body.ok).toBe(false)
+        
+        server.close()
+      })
+      
+      it('should reject without auth', async () => {
+        const podcast = await createTestPodcast('Test Podcast')
+        const episode = await createTestEpisode(podcast.id, 'Test Episode', { status: 'draft' })
+        
+        const { app } = await import('../src/index.js')
+        const server = createTestServer(app)
+        const response = await request(server)
+          .post(`/admin/episodes/${episode.id}/status`)
+          .send({ status: 'ready' })
+        
+        expect(response.status).toBe(401)
+        expect(response.body.ok).toBe(false)
+        
+        server.close()
+      })
+    })
+    
+    describe('POST /admin/episodes/:id/retry-transcode', () => {
+      it('should retry transcoding for failed episode', async () => {
+        const podcast = await createTestPodcast('Test Podcast')
+        const storagePath = `${TEST_UPLOADS_DIR}/test-${Date.now()}/source.mp3`
+        await fs.mkdir(path.dirname(storagePath), { recursive: true })
+        await fs.writeFile(storagePath, 'test audio data')
+        
+        const episode = await createTestEpisode(podcast.id, 'Failed Episode', {
+          status: 'failed',
+          storagePath,
+        })
+        
+        const { app } = await import('../src/index.js')
+        const server = createTestServer(app)
+        const response = await request(server)
+          .post(`/admin/episodes/${episode.id}/retry-transcode`)
+          .set('Authorization', `Bearer ${TEST_ADMIN_KEY}`)
+        
+        expect(response.status).toBe(200)
+        expect(response.body.ok).toBe(true)
+        expect(response.body.episode.status).toBe('processing')
+        
+        server.close()
+      })
+      
+      it('should reject retry for non-existent episode', async () => {
+        const { app } = await import('../src/index.js')
+        const server = createTestServer(app)
+        const response = await request(server)
+          .post('/admin/episodes/00000000-0000-0000-0000-000000000000/retry-transcode')
+          .set('Authorization', `Bearer ${TEST_ADMIN_KEY}`)
+        
+        expect(response.status).toBe(404)
+        expect(response.body.ok).toBe(false)
+        
+        server.close()
+      })
+      
+      it('should reject retry without auth', async () => {
+        const podcast = await createTestPodcast('Test Podcast')
+        const storagePath = `${TEST_UPLOADS_DIR}/test-${Date.now()}-noauth/source.mp3`
+        await fs.mkdir(path.dirname(storagePath), { recursive: true })
+        await fs.writeFile(storagePath, 'test audio data')
+        
+        const episode = await createTestEpisode(podcast.id, 'Failed Episode', {
+          status: 'failed',
+          storagePath,
+        })
+        
+        const { app } = await import('../src/index.js')
+        const server = createTestServer(app)
+        const response = await request(server)
+          .post(`/admin/episodes/${episode.id}/retry-transcode`)
+        
+        expect(response.status).toBe(401)
+        
+        server.close()
+      })
+      
+      it('should reject retry if already processing', async () => {
+        const podcast = await createTestPodcast('Test Podcast')
+        const storagePath = `${TEST_UPLOADS_DIR}/test-${Date.now()}-processing/source.mp3`
+        await fs.mkdir(path.dirname(storagePath), { recursive: true })
+        await fs.writeFile(storagePath, 'test audio data')
+        
+        const episode = await createTestEpisode(podcast.id, 'Processing Episode', {
+          status: 'processing',
+          storagePath,
+        })
+        
+        const { app } = await import('../src/index.js')
+        const server = createTestServer(app)
+        const response = await request(server)
+          .post(`/admin/episodes/${episode.id}/retry-transcode`)
           .set('Authorization', `Bearer ${TEST_ADMIN_KEY}`)
         
         expect(response.status).toBe(400)

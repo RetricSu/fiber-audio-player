@@ -254,7 +254,7 @@ export async function transcodeEpisode(
 
 export async function updateEpisodeStatus(
   episodeId: string,
-  status: 'draft' | 'processing' | 'ready' | 'published' | 'archived',
+  status: 'draft' | 'processing' | 'ready' | 'published' | 'archived' | 'failed',
   duration?: number,
 ): Promise<void> {
   const stmt = getDb().prepare(
@@ -266,17 +266,22 @@ export async function updateEpisodeStatus(
 async function processTranscodeJob(job: TranscodeJob): Promise<void> {
   await updateEpisodeStatus(job.episodeId, 'processing');
   
-  const result = await transcodeEpisode(
-    job.podcastId,
-    job.episodeId,
-    job.inputPath,
-  );
-  
-  if (!result.success) {
-    throw new Error(result.error || 'Transcoding failed');
+  try {
+    const result = await transcodeEpisode(
+      job.podcastId,
+      job.episodeId,
+      job.inputPath,
+    );
+    
+    if (!result.success) {
+      throw new Error(result.error || 'Transcoding failed');
+    }
+    
+    await updateEpisodeStatus(job.episodeId, 'ready', result.duration);
+  } catch (error) {
+    await updateEpisodeStatus(job.episodeId, 'failed');
+    throw error;
   }
-  
-  await updateEpisodeStatus(job.episodeId, 'ready', result.duration);
 }
 
 export function initializeTranscodeQueue(): void {

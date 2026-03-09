@@ -23,6 +23,7 @@ import {
   updatePodcastSchema,
   createEpisodeSchema,
   updateEpisodeSchema,
+  updateEpisodeStatusSchema,
   createSessionSchema,
   createInvoiceSchema,
   claimInvoiceSchema,
@@ -1349,9 +1350,9 @@ app.put('/admin/episodes/:id', async (c) => {
       return c.json({ ok: false, error: 'Episode not found' }, 404)
     }
 
-    // Do not allow editing published episodes
-    if (existing.status === 'published') {
-      return c.json({ ok: false, error: 'Cannot edit a published episode' }, 400)
+    // Only block price_per_second edits on published episodes
+    if (existing.status === 'published' && price_per_second !== undefined) {
+      return c.json({ ok: false, error: 'Cannot modify price_per_second on a published episode' }, 400)
     }
 
     // Build update query
@@ -1372,6 +1373,9 @@ app.put('/admin/episodes/:id', async (c) => {
       updates.push('price_per_second = ?')
       params.push(BigInt(price_per_second).toString())
     }
+
+    updates.push('updated_at = ?')
+    params.push(Date.now())
 
     params.push(id)
 
@@ -1515,6 +1519,134 @@ app.post('/admin/episodes/:id/publish', async (c) => {
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to publish episode'
+    return c.json({ ok: false, error: message }, 500)
+  }
+})
+
+// POST /admin/episodes/:id/retry-transcode - Retry transcoding for failed episode
+app.post('/admin/episodes/:id/retry-transcode', async (c) => {
+  const auth = requireAdminAuth(c)
+  if (!auth.ok) {
+    return c.json({ ok: false, error: auth.error }, 401)
+  }
+
+  const id = c.req.param('id')
+
+  try {
+    // Get full episode details once
+    const episode = getDb().prepare(`
+      SELECT id, podcast_id, title, description, duration, storage_path, price_per_second, status, created_at
+      FROM episodes
+      WHERE id = ?
+    `).get(id) as {
+      id: string
+      podcast_id: string
+      title: string
+      description: string | null
+      duration: number | null
+      storage_path: string
+      price_per_second: number
+      status: string
+      created_at: number
+    } | undefined
+
+    if (!episode) {
+      return c.json({ ok: false, error: 'Episode not found' }, 404)
+    }
+
+    // Only allow retry for failed or archived episodes
+    if (episode.status !== 'failed' && episode.status !== 'archived') {
+      return c.json({
+        ok: false,
+        error: 'Episode status does not allow retry (only failed or archived episodes can be retried)'
+      }, 400)
+    }
+
+    // Check source file exists
+    if (!episode.storage_path) {
+      return c.json({ ok: false, error: 'Episode has no source file' }, 400)
+    }
+
+    try {
+      await fs.access(episode.storage_path)
+    } catch {
+      return c.json({ ok: false, error: 'Source file not found' }, 400)
+    }
+
+    // Queue transcoding first, then update status
+    await transcodeService.queueTranscodeJob(
+      episode.podcast_id,
+      id,
+      episode.storage_path
+    )
+    await transcodeService.updateEpisodeStatus(id, 'processing')
+
+    // Update in-memory object and return
+    episode.status = 'processing'
+
+    return c.json({
+      ok: true,
+      episode: {
+        ...episode,
+        price_per_second: episode.price_per_second.toString(),
+      },
+      message: 'Transcoding retry queued',
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to retry transcoding'
+    return c.json({ ok: false, error: message }, 500)
+  }
+})
+
+// POST /admin/episodes/:id/status - Update episode status (admin only)
+app.post('/admin/episodes/:id/status', async (c) => {
+  const auth = requireAdminAuth(c)
+  if (!auth.ok) {
+    return c.json({ ok: false, error: auth.error }, 401)
+  }
+
+  const id = c.req.param('id')
+
+  // Validate body
+  const validation = await validateBody(c, updateEpisodeStatusSchema)
+  if (!validation.success) {
+    return c.json({ ok: false, error: validation.error }, 400)
+  }
+
+  const { status } = validation.data
+
+  try {
+    const info = getDb().prepare('UPDATE episodes SET status = ? WHERE id = ?').run(status, id)
+
+    if (info.changes === 0) {
+      return c.json({ ok: false, error: 'Episode not found' }, 404)
+    }
+
+    const episode = getDb().prepare(`
+      SELECT id, podcast_id, title, description, duration, storage_path, price_per_second, status, created_at
+      FROM episodes
+      WHERE id = ?
+    `).get(id) as {
+      id: string
+      podcast_id: string
+      title: string
+      description: string | null
+      duration: number | null
+      storage_path: string
+      price_per_second: number
+      status: string
+      created_at: number
+    }
+
+    return c.json({
+      ok: true,
+      episode: {
+        ...episode,
+        price_per_second: episode.price_per_second.toString(),
+      },
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to update status'
     return c.json({ ok: false, error: message }, 500)
   }
 })
