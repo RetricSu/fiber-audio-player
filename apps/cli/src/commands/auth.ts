@@ -77,6 +77,7 @@ export function createAuthCommands(): Command {
 
         spinner.start('Saving configuration...');
         const configManager = new ConfigManager();
+        await configManager.load();
         configManager.set('apiUrl', backendUrl!);
         configManager.set('apiToken', apiKey!);
         await configManager.save();
