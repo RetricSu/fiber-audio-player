@@ -1093,8 +1093,8 @@ app.post('/admin/episodes', async (c) => {
     const storagePath = '' // Will be set after upload
 
     getDb().prepare(`
-      INSERT INTO episodes (id, podcast_id, title, description, duration, storage_path, price_per_second, status, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO episodes (id, podcast_id, title, description, duration, storage_path, price_per_second, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       podcast_id,
@@ -1104,6 +1104,7 @@ app.post('/admin/episodes', async (c) => {
       storagePath,
       pricePerSecond,
       'draft',
+      now,
       now
     )
 
@@ -1119,6 +1120,7 @@ app.post('/admin/episodes', async (c) => {
         price_per_second: pricePerSecond.toString(),
         status: 'draft',
         created_at: now,
+        updated_at: now,
       },
     }, 201)
   } catch (err) {
@@ -1557,7 +1559,7 @@ app.post('/admin/episodes/:id/unpublish', async (c) => {
 
     // Get updated episode
     const episode = getDb().prepare(`
-      SELECT id, podcast_id, title, description, duration, storage_path, price_per_second, status, created_at
+      SELECT id, podcast_id, title, description, duration, storage_path, price_per_second, status, created_at, updated_at
       FROM episodes
       WHERE id = ?
     `).get(id) as {
@@ -1570,6 +1572,7 @@ app.post('/admin/episodes/:id/unpublish', async (c) => {
       price_per_second: number
       status: string
       created_at: number
+      updated_at: number
     }
 
     return c.json({
