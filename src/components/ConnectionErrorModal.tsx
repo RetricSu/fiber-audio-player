@@ -141,7 +141,6 @@ export function ConnectionErrorModal({ isOpen, onClose, error, rpcUrl, onRequest
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
-            onClick={onClose}
           />
 
           {/* Modal Container - centered with scroll support */}

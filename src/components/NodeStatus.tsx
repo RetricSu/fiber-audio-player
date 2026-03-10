@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useState, useEffect } from 'react';
+import { ReactNode, useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { ChannelStatus } from '@/hooks/use-fiber-node';
 import { NodeInfo } from '@/lib/fiber-rpc';
@@ -65,13 +65,33 @@ export function NodeStatus({
   onRequestEditUrl,
 }: NodeStatusProps) {
   const [showErrorModal, setShowErrorModal] = useState(false);
+  const wasConnectingRef = useRef(false);
 
-  // Auto-show error modal when connection fails
+  // Show error modal only once per failed connect attempt.
   useEffect(() => {
-    if (error && !isConnecting && !isConnected) {
+    const connectAttemptJustFinished = wasConnectingRef.current && !isConnecting;
+
+    if (connectAttemptJustFinished && error && !isConnected) {
       setShowErrorModal(true);
     }
+
+    if (!error) {
+      setShowErrorModal(false);
+    }
+
+    wasConnectingRef.current = isConnecting;
   }, [error, isConnecting, isConnected]);
+
+  const handleConnectToggle = () => {
+    if (isConnected) {
+      onDisconnect();
+      return;
+    }
+
+    // Clear stale modal state before a new attempt.
+    setShowErrorModal(false);
+    onConnect();
+  };
 
   const getChannelStatusDisplay = () => {
     switch (channelStatus) {
@@ -144,7 +164,7 @@ export function NodeStatus({
 
             <div className="flex items-center gap-2">
               <button
-                onClick={isConnected ? onDisconnect : onConnect}
+                onClick={handleConnectToggle}
                 disabled={isConnecting}
                 className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider rounded-lg transition-all border ${
                   isConnected
