@@ -293,46 +293,54 @@ export function AudioPlayer({
             </button>
 
             {/* Play/Pause */}
-            <motion.button
-              onClick={handlePlayPause}
-              className="relative w-16 h-16 rounded-full bg-fiber-accent flex items-center justify-center shadow-lg shadow-fiber-accent/30 disabled:opacity-50 disabled:cursor-not-allowed"
-              whileHover={isPlayButtonDisabled ? undefined : { scale: 1.05 }}
-              whileTap={isPlayButtonDisabled ? undefined : { scale: 0.95 }}
-              disabled={isPlayButtonDisabled}
-              title={
-                !isFiberConnected
-                  ? 'Connect Fiber node first'
-                  : !isRouteReady
-                  ? 'Check route before playing'
-                  : undefined
-              }
-            >
-              {audio.isLoading ? (
-                <motion.div
-                  className="w-6 h-6 border-2 border-fiber-dark border-t-transparent rounded-full"
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                />
-              ) : audio.isPlaying ? (
-                <svg className="w-7 h-7 text-fiber-dark" fill="currentColor" viewBox="0 0 24 24">
-                  <rect x="6" y="4" width="4" height="16" rx="1" />
-                  <rect x="14" y="4" width="4" height="16" rx="1" />
-                </svg>
-              ) : (
-                <svg className="w-7 h-7 text-fiber-dark ml-1" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              )}
+            <div className="relative group">
+              <motion.button
+                onClick={handlePlayPause}
+                className="relative w-16 h-16 rounded-full bg-fiber-accent flex items-center justify-center shadow-lg shadow-fiber-accent/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                whileHover={isPlayButtonDisabled ? undefined : { scale: 1.05 }}
+                whileTap={isPlayButtonDisabled ? undefined : { scale: 0.95 }}
+                disabled={isPlayButtonDisabled}
+                title={
+                  !isFiberConnected
+                    ? 'Connect Fiber node first'
+                    : !isRouteReady
+                    ? 'Check route before playing'
+                    : undefined
+                }
+              >
+                {audio.isLoading ? (
+                  <motion.div
+                    className="w-6 h-6 border-2 border-fiber-dark border-t-transparent rounded-full"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                  />
+                ) : audio.isPlaying ? (
+                  <svg className="w-7 h-7 text-fiber-dark" fill="currentColor" viewBox="0 0 24 24">
+                    <rect x="6" y="4" width="4" height="16" rx="1" />
+                    <rect x="14" y="4" width="4" height="16" rx="1" />
+                  </svg>
+                ) : (
+                  <svg className="w-7 h-7 text-fiber-dark ml-1" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                )}
 
-              {/* Ripple effect when playing */}
-              {audio.isPlaying && (
-                <motion.div
-                  className="absolute inset-0 rounded-full border-2 border-fiber-accent"
-                  animate={{ scale: [1, 1.3], opacity: [0.5, 0] }}
-                  transition={{ duration: 1.5, repeat: Infinity }}
-                />
+                {/* Ripple effect when playing */}
+                {audio.isPlaying && (
+                  <motion.div
+                    className="absolute inset-0 rounded-full border-2 border-fiber-accent"
+                    animate={{ scale: [1, 1.3], opacity: [0.5, 0] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  />
+                )}
+              </motion.button>
+
+              {isPlayButtonDisabled && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 rounded-lg bg-fiber-surface border border-fiber-border text-xs text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
+                  Connect Fiber node and check route first
+                </div>
               )}
-            </motion.button>
+            </div>
 
             {/* Skip forward */}
             <button

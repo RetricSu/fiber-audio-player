@@ -39,6 +39,19 @@ const TerminalIcon = () => (
   </svg>
 );
 
+const ClipboardIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+  </svg>
+);
+
+const CheckmarkIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+);
+
 // Error type configuration - defined outside component for performance
 const errorConfig = {
   network: {
@@ -92,10 +105,22 @@ interface ConnectionErrorModalProps {
 
 export function ConnectionErrorModal({ isOpen, onClose, error, rpcUrl, onRequestEditUrl }: ConnectionErrorModalProps) {
   const [mounted, setMounted] = useState(false);
+  const [copiedInstall, setCopiedInstall] = useState(false);
+  const [copiedStart, setCopiedStart] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const handleCopy = async (text: string, setCopied: (v: boolean) => void) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Silently fail
+    }
+  };
 
   const errorType = getErrorType(error);
   const config = errorConfig[errorType];
@@ -184,18 +209,32 @@ export function ConnectionErrorModal({ isOpen, onClose, error, rpcUrl, onRequest
                       <div className="space-y-2">
                         <p className="text-xs font-mono uppercase tracking-wider text-fiber-muted/95">1. Install</p>
                         <div className="relative">
-                          <pre className="p-3 rounded-lg bg-black/40 text-xs font-mono text-white/90 overflow-x-auto">
+                          <pre className="p-3 pr-10 rounded-lg bg-black/40 text-xs font-mono text-white/90 overflow-x-auto">
                             npm install -g @fiber-pay/cli@next
                           </pre>
+                          <button
+                            onClick={() => handleCopy('npm install -g @fiber-pay/cli@next', setCopiedInstall)}
+                            className="absolute top-2 right-2 p-1 rounded-md bg-fiber-surface/80 hover:bg-fiber-accent/20 transition-colors"
+                            aria-label="Copy install command"
+                          >
+                            {copiedInstall ? <CheckmarkIcon /> : <ClipboardIcon />}
+                          </button>
                         </div>
                       </div>
 
                       <div className="space-y-2">
                         <p className="text-xs font-mono uppercase tracking-wider text-fiber-muted/95">2. Start the node</p>
                         <div className="relative">
-                          <pre className="p-3 rounded-lg bg-black/40 text-xs font-mono text-white/90 overflow-x-auto">
+                          <pre className="p-3 pr-10 rounded-lg bg-black/40 text-xs font-mono text-white/90 overflow-x-auto">
                             fiber-pay node start
                           </pre>
+                          <button
+                            onClick={() => handleCopy('fiber-pay node start', setCopiedStart)}
+                            className="absolute top-2 right-2 p-1 rounded-md bg-fiber-surface/80 hover:bg-fiber-accent/20 transition-colors"
+                            aria-label="Copy start command"
+                          >
+                            {copiedStart ? <CheckmarkIcon /> : <ClipboardIcon />}
+                          </button>
                         </div>
                       </div>
 
@@ -217,6 +256,15 @@ export function ConnectionErrorModal({ isOpen, onClose, error, rpcUrl, onRequest
                     className="px-4 py-2 text-sm font-medium text-white/85 hover:text-white transition-colors"
                   >
                     Close
+                  </button>
+                  <button
+                    onClick={() => {
+                      onRequestEditUrl?.();
+                      onClose();
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-white/85 hover:text-white transition-colors"
+                  >
+                    Edit URL
                   </button>
                   <a
                     href="https://github.com/RetricSu/fiber-pay"
