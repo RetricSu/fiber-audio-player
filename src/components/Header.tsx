@@ -36,6 +36,7 @@ interface HeaderProps {
   // RPC URL config
   rpcUrlValue?: string;
   onRpcUrlChange?: (url: string) => void;
+  onRequestEditUrl?: () => void;
   // Backend error
   backendError?: string | null;
 }
@@ -68,6 +69,7 @@ export function Header({
   rpcUrlValue,
   onRpcUrlChange,
   backendError,
+  onRequestEditUrl,
 }: HeaderProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -226,6 +228,7 @@ export function Header({
                       onCheckRoute={onCheckRoute}
                       onOpenChannel={onOpenChannel}
                       onCancelSetup={onCancelSetup}
+                      onRequestEditUrl={onRequestEditUrl}
                       topConfigPanel={
                         !isConnected ? (
                           <div>

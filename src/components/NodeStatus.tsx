@@ -33,6 +33,7 @@ interface NodeStatusProps {
   recipientPubkey?: string;
   recipientMultiaddrConfigured?: boolean;
   topConfigPanel?: ReactNode;
+  onRequestEditUrl?: () => void;
 }
 
 export function NodeStatus({
@@ -61,6 +62,7 @@ export function NodeStatus({
   recipientPubkey,
   recipientMultiaddrConfigured = false,
   topConfigPanel,
+  onRequestEditUrl,
 }: NodeStatusProps) {
   const [showErrorModal, setShowErrorModal] = useState(false);
 
@@ -410,6 +412,7 @@ export function NodeStatus({
         onClose={() => setShowErrorModal(false)}
         error={error}
         rpcUrl={rpcUrl}
+        onRequestEditUrl={onRequestEditUrl}
       />
     </div>
   );

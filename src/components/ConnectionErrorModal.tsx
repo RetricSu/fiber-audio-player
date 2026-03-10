@@ -87,9 +87,10 @@ interface ConnectionErrorModalProps {
   onClose: () => void;
   error: string | null;
   rpcUrl: string;
+  onRequestEditUrl?: () => void;
 }
 
-export function ConnectionErrorModal({ isOpen, onClose, error, rpcUrl }: ConnectionErrorModalProps) {
+export function ConnectionErrorModal({ isOpen, onClose, error, rpcUrl, onRequestEditUrl }: ConnectionErrorModalProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
