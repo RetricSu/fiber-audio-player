@@ -258,7 +258,7 @@ export function Header({
                         !isConnected ? (
                           <div>
                             <label className="block text-xs text-fiber-muted/95 mb-2 font-mono uppercase tracking-wider">
-                              Fiber RPC URL
+                              Connect To Your Fiber Node Via RPC URL
                             </label>
                             <div className="relative group">
                               <input
@@ -267,7 +267,7 @@ export function Header({
                                 value={rpcUrlValue || rpcUrl}
                                 onChange={(e) => onRpcUrlChange?.(e.target.value)}
                                 className="w-full px-3 py-2 pr-10 bg-fiber-dark border border-fiber-border rounded-lg text-sm font-mono text-white focus:outline-none focus:border-fiber-accent focus:ring-1 focus:ring-fiber-accent/30 hover:bg-fiber-surface/50 transition-all duration-200"
-                                placeholder="http://127.0.0.1:28229"
+                                placeholder={rpcUrl}
                               />
                               <div className="absolute right-3 top-1/2 -translate-y-1/2 text-fiber-muted group-hover:text-fiber-accent transition-colors pointer-events-none">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>

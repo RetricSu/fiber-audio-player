@@ -244,7 +244,7 @@ export function ConnectionErrorModal({ isOpen, onClose, error, rpcUrl, onRequest
                       <div className="space-y-2">
                         <p className="text-xs text-fiber-muted/95">
                           3. Use this RPC endpoint in the player:{' '}
-                          <code>http://127.0.0.1:28229</code>
+                          <code>http://127.0.0.1:8229</code>
                           {' '}via fiber-pay runtime proxy for CORS support
                         </p>
                       </div>
