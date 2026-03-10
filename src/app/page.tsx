@@ -13,7 +13,7 @@ import { useStreamingPayment } from '@/hooks/use-streaming-payment';
 import { getBackendNodeInfo } from '@/lib/stream-auth';
 
 // Default configuration
-const DEFAULT_RPC_URL = 'http://127.0.0.1:28229';
+const DEFAULT_RPC_URL = 'http://127.0.0.1:8229';
 const FAUCET_URL = 'https://testnet.ckbapp.dev/';
 
 // Bootnode multiaddr — for the user's node to join the Fiber network.
