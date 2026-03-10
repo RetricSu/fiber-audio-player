@@ -37,6 +37,8 @@ interface HeaderProps {
   rpcUrlValue?: string;
   onRpcUrlChange?: (url: string) => void;
   onRequestEditUrl?: () => void;
+  isDropdownOpen?: boolean;
+  onDropdownOpenChange?: (open: boolean) => void;
   // Backend error
   backendError?: string | null;
 }
@@ -70,9 +72,16 @@ export function Header({
   onRpcUrlChange,
   backendError,
   onRequestEditUrl,
+  isDropdownOpen: controlledIsDropdownOpen,
+  onDropdownOpenChange,
 }: HeaderProps) {
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  // Use internal state as fallback if props not provided (backward compatibility)
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
+  const isDropdownOpen = controlledIsDropdownOpen ?? internalIsOpen;
+  const setIsDropdownOpen = onDropdownOpenChange ?? setInternalIsOpen;
+
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -84,7 +93,14 @@ export function Header({
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [setIsDropdownOpen]);
+
+  useEffect(() => {
+    if (isDropdownOpen && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isDropdownOpen]);
 
   const getButtonStatus = () => {
     if (isConnecting) return { text: 'Connecting...', color: 'bg-fiber-warning' };
@@ -145,6 +161,7 @@ export function Header({
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              type="button"
               className="flex items-center gap-2 px-4 py-2 rounded-xl border border-fiber-border/70 bg-fiber-surface/80 hover:bg-fiber-surface transition-all group"
             >
               {/* Status indicator */}
@@ -237,6 +254,7 @@ export function Header({
                             </label>
                             <div className="relative group">
                               <input
+                                ref={inputRef}
                                 type="text"
                                 value={rpcUrlValue || rpcUrl}
                                 onChange={(e) => onRpcUrlChange?.(e.target.value)}

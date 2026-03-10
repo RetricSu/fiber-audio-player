@@ -66,6 +66,7 @@ export default function Home() {
   const [rpcUrl, setRpcUrl] = useState(DEFAULT_RPC_URL);
   const [selectedPodcast, setSelectedPodcast] = useState<Podcast | null>(null);
   const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
+  const [isNodeDropdownOpen, setIsNodeDropdownOpen] = useState(false);
 
   // Auto-fetch the developer node's pubkey from backend /node-info
   const [recipientPubkey, setRecipientPubkey] = useState('');
@@ -104,6 +105,10 @@ export default function Home() {
     setSelectedEpisode(episode);
   };
 
+  const handleRequestEditUrl = () => {
+    setIsNodeDropdownOpen(true);
+  };
+
   const handleBackToPodcasts = () => {
     setSelectedPodcast(null);
     setSelectedEpisode(null);
@@ -140,6 +145,9 @@ export default function Home() {
         rpcUrlValue={rpcUrl}
         onRpcUrlChange={setRpcUrl}
         backendError={backendError}
+        isDropdownOpen={isNodeDropdownOpen}
+        onDropdownOpenChange={setIsNodeDropdownOpen}
+        onRequestEditUrl={handleRequestEditUrl}
       />
 
       {/* Main content */}
