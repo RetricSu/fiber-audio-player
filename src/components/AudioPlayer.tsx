@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAudioPlayer } from '@/hooks/use-audio-player';
 import { UseStreamingPaymentResult } from '@/hooks/use-streaming-payment';
-import { toAbsolutePlaylistUrl } from '@/lib/stream-auth';
 import { WaveformVisualizer } from './WaveformVisualizer';
 import { PaymentFlowVisualizer } from './PaymentFlowVisualizer';
 
