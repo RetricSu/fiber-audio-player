@@ -44,7 +44,6 @@ export const updateEpisodeStatusSchema = z.object({
 
 export const createSessionSchema = z.object({
   episodeId: z.string().uuid('Invalid episodeId format'),
-  clientKey: z.string().optional(),
 })
 
 export const createInvoiceSchema = z.object({

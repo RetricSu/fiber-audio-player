@@ -684,6 +684,8 @@ export function AudioPlayer({
         currentStep={paymentStep}
         onCancel={() => {
           setShowPaymentLoading(false);
+          // Clear payment lock so user can retry immediately
+          clearPaymentLock(episode.id);
         }}
       />
     </div>

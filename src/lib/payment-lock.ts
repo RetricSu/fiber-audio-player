@@ -1,7 +1,7 @@
 // Payment lock utility with sessionStorage and 30-second TTL
 // Prevents duplicate payment attempts for the same episode
 
-const TTL_MS = 30000; // 30 seconds - aligns with backend invoice expiration
+const TTL_MS = 60000; // 60 seconds - aligns with payment processing time (10-60s)
 
 interface LockData {
   lockedAt: number;
