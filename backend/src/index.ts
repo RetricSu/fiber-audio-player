@@ -192,7 +192,7 @@ function getStreamSessionByToken(streamToken: string): StreamSession | undefined
 
 function updateStreamSession(session: StreamSession): void {
   getDb().prepare(`
-    UPDATE stream_sessions 
+    UPDATE stream_sessions
     SET total_paid_seconds = ?, max_segment_index = ?, expires_at = ?
     WHERE id = ?
   `).run(
@@ -394,7 +394,7 @@ app.post('/sessions/create', async (c) => {
       episodeId,
       streamToken,
       totalPaidSeconds: 0,
-      maxSegmentIndex: -1, // no segments unlocked yet
+      maxSegmentIndex: -1,
       expiresAt,
       createdAt: Date.now(),
     }

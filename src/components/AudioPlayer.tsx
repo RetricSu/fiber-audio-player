@@ -6,6 +6,9 @@ import { useAudioPlayer } from '@/hooks/use-audio-player';
 import { UseStreamingPaymentResult } from '@/hooks/use-streaming-payment';
 import { WaveformVisualizer } from './WaveformVisualizer';
 import { PaymentFlowVisualizer } from './PaymentFlowVisualizer';
+import { PaymentLoadingSimple } from './PaymentLoadingSimple';
+import { getCachedPayment, setCachedPayment } from '@/lib/payment-cache';
+import { createSession } from '@/lib/stream-auth';
 
 interface Episode {
   id: string;
@@ -46,6 +49,8 @@ export function AudioPlayer({
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
   const [playbackGuardError, setPlaybackGuardError] = useState<string | null>(null);
   const [playbackSrc, setPlaybackSrc] = useState(episode.audioUrl);
+  const [showPaymentLoading, setShowPaymentLoading] = useState(false);
+  const [paymentStatus, setPaymentStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const wasPlayingRef = useRef(false);
   const shouldAutoPlayAfterAuthorizeRef = useRef(false);
 
@@ -53,6 +58,7 @@ export function AudioPlayer({
 
   // Auto-extend: when playback approaches the paid segment boundary, pay for more
   const isExtendingRef = useRef(false);
+
   useEffect(() => {
     if (
       !audio.isPlaying ||
@@ -124,25 +130,55 @@ export function AudioPlayer({
 
       setPlaybackGuardError(null);
 
+      // Check cache first
+      const cached = getCachedPayment(episode.id);
+      if (cached) {
+        // Use cached playlist - no payment needed
+        setPlaybackSrc(cached.playlistUrl);
+        audio.play().catch(() => {
+          setPlaybackGuardError('Playback failed.');
+        });
+        return;
+      }
+
+      // Not cached: show loading and pay
+      setPaymentStatus('loading');
+      setShowPaymentLoading(true);
+
       try {
-        // Start streaming: creates session → invoice → pay → claim → returns grant
         const grant = await payment.start(episode.id, chunkSeconds);
+        setShowPaymentLoading(false);
+
         if (!grant) {
+          setPaymentStatus('error');
           setPlaybackGuardError(payment.error || 'Unable to start payment stream.');
           return;
         }
 
-        // Set HLS playlist URL from the grant
-        shouldAutoPlayAfterAuthorizeRef.current = true;
+        // Save to cache for future plays
+        setCachedPayment(episode.id, {
+          sessionId: grant.token,
+          streamToken: grant.token,
+          playlistUrl: grant.playlistUrl,
+          grantedSeconds: grant.grantedSeconds,
+          paidAt: Date.now()
+        });
+
+        setPaymentStatus('idle');
         setPlaybackSrc(grant.playlistUrl);
+        audio.play().catch(() => {
+          setPlaybackGuardError('Playback failed.');
+        });
       } catch (error) {
+        setShowPaymentLoading(false);
+        setPaymentStatus('error');
         await payment.stop();
-        setPlaybackGuardError(
-          error instanceof Error ? error.message : 'Failed to authorize stream playback.'
-        );
+
+        const errorMessage = error instanceof Error ? error.message : 'Failed to authorize stream playback.';
+        setPlaybackGuardError(errorMessage);
       }
     }
-  }, [audio, isFiberConnected, isRouteReady, payment, chunkSeconds]);
+  }, [audio, isFiberConnected, isRouteReady, payment, chunkSeconds, episode.id]);
 
   const handleSeek = useCallback(
     (progress: number) => {
@@ -433,6 +469,17 @@ export function AudioPlayer({
           </motion.div>
         )}
       </AnimatePresence>
+
+      <PaymentLoadingSimple
+        isVisible={showPaymentLoading}
+        status={paymentStatus === 'loading' ? 'loading' : paymentStatus === 'error' ? 'error' : 'success'}
+        error={playbackGuardError || payment.error || undefined}
+        onClose={() => {
+          setShowPaymentLoading(false);
+          setPaymentStatus('idle');
+        }}
+        onRetry={handlePlayPause}
+      />
     </div>
   );
 }

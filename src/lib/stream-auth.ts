@@ -64,23 +64,36 @@ async function getJson<TResponse>(path: string): Promise<TResponse> {
   return payload as TResponse
 }
 
-async function postJson<TRequest, TResponse>(path: string, body: TRequest): Promise<TResponse> {
-  const response = await fetch(`${backendBaseUrl()}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  })
+async function postJson<TRequest, TResponse>(path: string, body: TRequest, timeoutMs?: number): Promise<TResponse> {
+  const controller = new AbortController()
+  const timeoutId = timeoutMs ? setTimeout(() => controller.abort(), timeoutMs) : null
 
-  const payload = await response.json().catch(() => ({}))
+  try {
+    const response = await fetch(`${backendBaseUrl()}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
 
-  if (!response.ok) {
-    const message = payload?.error || `Request failed: ${response.status}`
-    throw new Error(message)
+    const payload = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      const message = payload?.error || `Request failed: ${response.status}`
+      throw new Error(message)
+    }
+
+    return payload as TResponse
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('请求超时，请稍后重试或查询状态')
+    }
+    throw error
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
   }
-
-  return payload as TResponse
 }
 
 export async function getBackendNodeInfo(): Promise<BackendNodeInfo> {
@@ -89,7 +102,7 @@ export async function getBackendNodeInfo(): Promise<BackendNodeInfo> {
 }
 
 export async function createSession(episodeId?: string): Promise<CreateSessionResponse> {
-  return postJson<{ episodeId?: string }, CreateSessionResponse>('/sessions/create', episodeId ? { episodeId } : {})
+  return postJson<{ episodeId?: string }, CreateSessionResponse>('/sessions/create', episodeId ? { episodeId } : {}, 10000)
 }
 
 export async function createInvoice(input: CreateInvoiceRequest): Promise<CreateInvoiceResponse> {
