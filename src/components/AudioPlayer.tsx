@@ -6,6 +6,14 @@ import { useAudioPlayer } from '@/hooks/use-audio-player';
 import { UseStreamingPaymentResult } from '@/hooks/use-streaming-payment';
 import { WaveformVisualizer } from './WaveformVisualizer';
 import { PaymentFlowVisualizer } from './PaymentFlowVisualizer';
+import { PaymentLoading } from './PaymentLoading';
+import {
+  setPaymentLock,
+  isPaymentLocked,
+  clearPaymentLock,
+  getLockRemainingText,
+} from '@/lib/payment-lock';
+import { createSession } from '@/lib/stream-auth';
 
 interface Episode {
   id: string;
@@ -46,6 +54,11 @@ export function AudioPlayer({
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
   const [playbackGuardError, setPlaybackGuardError] = useState<string | null>(null);
   const [playbackSrc, setPlaybackSrc] = useState(episode.audioUrl);
+  const [paymentLockText, setPaymentLockText] = useState<string | null>(null);
+  const [showPaymentLoading, setShowPaymentLoading] = useState(false);
+  const [paymentStep, setPaymentStep] = useState<1 | 2 | 3>(1);
+  const [timeoutError, setTimeoutError] = useState<string | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<'idle' | 'checking' | 'pending' | 'completed' | 'failed'>('idle');
   const wasPlayingRef = useRef(false);
   const shouldAutoPlayAfterAuthorizeRef = useRef(false);
 
@@ -53,6 +66,28 @@ export function AudioPlayer({
 
   // Auto-extend: when playback approaches the paid segment boundary, pay for more
   const isExtendingRef = useRef(false);
+
+  // Poll for payment lock status to update UI
+  useEffect(() => {
+    if (audio.isPlaying || !episode.id) {
+      setPaymentLockText(null);
+      return;
+    }
+
+    const checkLock = () => {
+      if (isPaymentLocked(episode.id)) {
+        const remaining = getLockRemainingText(episode.id);
+        setPaymentLockText(remaining ? `支付进行中... (${remaining})` : '支付进行中...');
+      } else {
+        setPaymentLockText(null);
+      }
+    };
+
+    checkLock();
+    const interval = setInterval(checkLock, 1000);
+    return () => clearInterval(interval);
+  }, [audio.isPlaying, episode.id]);
+
   useEffect(() => {
     if (
       !audio.isPlaying ||
@@ -122,24 +157,55 @@ export function AudioPlayer({
         return;
       }
 
+      // Check for existing payment lock (prevents duplicate clicks)
+      if (isPaymentLocked(episode.id)) {
+        const remaining = getLockRemainingText(episode.id);
+        setPlaybackGuardError(remaining ? `支付进行中，请等待 ${remaining}...` : '支付进行中，请稍候...');
+        return;
+      }
+
       setPlaybackGuardError(null);
 
+      setPaymentLock(episode.id);
+
+      setPaymentStep(1);
+      setShowPaymentLoading(true);
+
+      const step2Timeout = setTimeout(() => setPaymentStep(2), 800);
+      const step3Timeout = setTimeout(() => setPaymentStep(3), 2000);
+
       try {
-        // Start streaming: creates session → invoice → pay → claim → returns grant
         const grant = await payment.start(episode.id, chunkSeconds);
+
+        clearTimeout(step2Timeout);
+        clearTimeout(step3Timeout);
+        setShowPaymentLoading(false);
+
         if (!grant) {
+          clearPaymentLock(episode.id);
           setPlaybackGuardError(payment.error || 'Unable to start payment stream.');
           return;
         }
 
-        // Set HLS playlist URL from the grant
+        clearPaymentLock(episode.id);
         shouldAutoPlayAfterAuthorizeRef.current = true;
         setPlaybackSrc(grant.playlistUrl);
       } catch (error) {
+        clearTimeout(step2Timeout);
+        clearTimeout(step3Timeout);
+        setShowPaymentLoading(false);
+
+        clearPaymentLock(episode.id);
         await payment.stop();
-        setPlaybackGuardError(
-          error instanceof Error ? error.message : 'Failed to authorize stream playback.'
-        );
+
+        const errorMessage = error instanceof Error ? error.message : 'Failed to authorize stream playback.';
+
+        if (errorMessage === '请求超时，请稍后重试或查询状态') {
+          setTimeoutError(errorMessage);
+          setPaymentStatus('idle');
+        } else {
+          setPlaybackGuardError(errorMessage);
+        }
       }
     }
   }, [audio, isFiberConnected, isRouteReady, payment, chunkSeconds]);
@@ -152,6 +218,19 @@ export function AudioPlayer({
     [audio]
   );
 
+  const handleCheckStatus = useCallback(async () => {
+    setPaymentStatus('checking');
+
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    setPaymentStatus('pending');
+  }, []);
+
+  const handleDismissTimeout = useCallback(() => {
+    setTimeoutError(null);
+    setPaymentStatus('idle');
+  }, []);
+
   const handleVolumeChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const newVolume = parseFloat(e.target.value);
@@ -163,7 +242,8 @@ export function AudioPlayer({
 
   const progress = audio.duration > 0 ? audio.currentTime / audio.duration : 0;
   const canStartPlayback = isFiberConnected && isRouteReady;
-  const isPlayButtonDisabled = audio.isLoading || (!audio.isPlaying && !canStartPlayback);
+  const isPaymentLockedState = Boolean(episode.id && isPaymentLocked(episode.id));
+  const isPlayButtonDisabled = audio.isLoading || (!audio.isPlaying && !canStartPlayback) || isPaymentLockedState;
 
   return (
     <div className="relative">
@@ -300,14 +380,22 @@ export function AudioPlayer({
                 whileTap={isPlayButtonDisabled ? undefined : { scale: 0.95 }}
                 disabled={isPlayButtonDisabled}
                 title={
-                  !isFiberConnected
+                  isPaymentLockedState
+                    ? paymentLockText || '支付进行中...'
+                    : !isFiberConnected
                     ? 'Connect Fiber node first'
                     : !isRouteReady
                     ? 'Check route before playing'
                     : undefined
                 }
               >
-                {audio.isLoading ? (
+                {isPaymentLockedState ? (
+                  <motion.div
+                    className="w-6 h-6 border-2 border-fiber-dark border-t-transparent rounded-full"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                  />
+                ) : audio.isLoading ? (
                   <motion.div
                     className="w-6 h-6 border-2 border-fiber-dark border-t-transparent rounded-full"
                     animate={{ rotate: 360 }}
@@ -334,11 +422,25 @@ export function AudioPlayer({
                 )}
               </motion.button>
 
-              {isPlayButtonDisabled && (
+              {isPlayButtonDisabled && !isPaymentLockedState && (
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 rounded-lg bg-fiber-surface border border-fiber-border text-xs text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
                   Connect Fiber node and check route first
                 </div>
               )}
+
+              {/* Payment lock indicator */}
+              <AnimatePresence>
+                {isPaymentLockedState && paymentLockText && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 5 }}
+                    className="absolute top-full left-1/2 -translate-x-1/2 mt-3 px-3 py-1.5 rounded-full bg-fiber-accent/10 border border-fiber-accent/30 whitespace-nowrap"
+                  >
+                    <span className="text-xs font-mono text-fiber-accent">{paymentLockText}</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* Skip forward */}
@@ -433,6 +535,157 @@ export function AudioPlayer({
           </motion.div>
         )}
       </AnimatePresence>
+
+      <AnimatePresence>
+        {timeoutError && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="mt-4 p-5 rounded-xl bg-amber-500/10 border border-amber-500/30"
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-sm font-medium text-amber-300 mb-1">
+                  支付处理超时
+                </h4>
+                <p className="text-sm text-amber-200/80 mb-4">
+                  {timeoutError}
+                </p>
+
+                {paymentStatus === 'idle' && (
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={handleCheckStatus}
+                      className="px-4 py-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-sm font-medium transition-colors flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                      </svg>
+                      查询状态
+                    </button>
+                    <button
+                      onClick={handleDismissTimeout}
+                      className="px-4 py-2 rounded-lg bg-fiber-surface hover:bg-fiber-surface/80 border border-fiber-border text-fiber-muted text-sm font-medium transition-colors"
+                    >
+                      关闭
+                    </button>
+                  </div>
+                )}
+
+                {paymentStatus === 'checking' && (
+                  <div className="flex items-center gap-3 py-2">
+                    <motion.div
+                      className="w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full"
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                    />
+                    <span className="text-sm text-amber-300">正在查询支付状态...</span>
+                  </div>
+                )}
+
+                {paymentStatus === 'pending' && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-amber-300">
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="text-sm font-medium">支付处理中</span>
+                    </div>
+                    <p className="text-xs text-amber-200/60">
+                      您的支付正在区块链上确认，通常需要 10-60 秒。请刷新页面查看最新状态。
+                    </p>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => window.location.reload()}
+                        className="px-4 py-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-sm font-medium transition-colors"
+                      >
+                        刷新页面
+                      </button>
+                      <button
+                        onClick={handleDismissTimeout}
+                        className="px-4 py-2 rounded-lg bg-fiber-surface hover:bg-fiber-surface/80 border border-fiber-border text-fiber-muted text-sm font-medium transition-colors"
+                      >
+                        稍后再试
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {paymentStatus === 'completed' && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-green-400">
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="text-sm font-medium">支付已完成</span>
+                    </div>
+                    <p className="text-xs text-amber-200/60">
+                      您的支付已成功确认，可以开始播放了。
+                    </p>
+                    <button
+                      onClick={() => {
+                        handleDismissTimeout();
+                        handlePlayPause();
+                      }}
+                      className="px-4 py-2 rounded-lg bg-fiber-accent hover:bg-fiber-accent/90 text-fiber-dark text-sm font-medium transition-colors flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                      立即播放
+                    </button>
+                  </div>
+                )}
+
+                {paymentStatus === 'failed' && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-red-400">
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="text-sm font-medium">支付失败</span>
+                    </div>
+                    <p className="text-xs text-amber-200/60">
+                      支付未能成功完成，请检查您的钱包余额和网络连接后重试。
+                    </p>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => {
+                          handleDismissTimeout();
+                          handlePlayPause();
+                        }}
+                        className="px-4 py-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-sm font-medium transition-colors"
+                      >
+                        重新支付
+                      </button>
+                      <button
+                        onClick={handleDismissTimeout}
+                        className="px-4 py-2 rounded-lg bg-fiber-surface hover:bg-fiber-surface/80 border border-fiber-border text-fiber-muted text-sm font-medium transition-colors"
+                      >
+                        取消
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <PaymentLoading
+        isVisible={showPaymentLoading}
+        currentStep={paymentStep}
+        onCancel={() => {
+          setShowPaymentLoading(false);
+        }}
+      />
     </div>
   );
 }

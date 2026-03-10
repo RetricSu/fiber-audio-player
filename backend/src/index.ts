@@ -192,7 +192,7 @@ function getStreamSessionByToken(streamToken: string): StreamSession | undefined
 
 function updateStreamSession(session: StreamSession): void {
   getDb().prepare(`
-    UPDATE stream_sessions 
+    UPDATE stream_sessions
     SET total_paid_seconds = ?, max_segment_index = ?, expires_at = ?
     WHERE id = ?
   `).run(
@@ -201,6 +201,38 @@ function updateStreamSession(session: StreamSession): void {
     session.expiresAt,
     session.id
   )
+}
+
+// Get recent session by episode within time window (for idempotency)
+function getRecentSessionByEpisode(episodeId: string, windowMs: number = 300000): StreamSession | undefined {
+  const cutoffTime = Date.now() - windowMs
+  const row = getDb().prepare(`
+    SELECT * FROM stream_sessions
+    WHERE episode_id = ?
+    AND created_at > ?
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).get(episodeId, cutoffTime) as {
+    id: string
+    episode_id: string
+    stream_token: string
+    total_paid_seconds: number
+    max_segment_index: number
+    expires_at: number
+    created_at: number
+  } | undefined
+
+  if (!row) return undefined
+
+  return {
+    id: row.id,
+    episodeId: row.episode_id,
+    streamToken: row.stream_token,
+    totalPaidSeconds: row.total_paid_seconds,
+    maxSegmentIndex: row.max_segment_index,
+    expiresAt: row.expires_at,
+    createdAt: row.created_at,
+  }
 }
 
 // Database helper functions for payments
@@ -364,7 +396,7 @@ app.post('/sessions/create', async (c) => {
     return c.json({ ok: false, error: validation.error }, 400)
   }
 
-  const { episodeId } = validation.data
+  const { episodeId, clientKey } = validation.data
 
   try {
     const episode = getDb().prepare(`
@@ -385,6 +417,23 @@ app.post('/sessions/create', async (c) => {
       return c.json({ ok: false, error: `Episode is not published (status: ${episode.status})` }, 400)
     }
 
+    // Idempotency: if clientKey provided, check for recent session (5 min window)
+    if (clientKey) {
+      const recentSession = getRecentSessionByEpisode(episodeId)
+      if (recentSession) {
+        return c.json({
+          ok: true,
+          session: {
+            sessionId: recentSession.id,
+            episodeId,
+            pricePerSecondShannon: episode.price_per_second.toString(),
+            segmentDurationSec,
+          },
+          fromCache: true,
+        })
+      }
+    }
+
     const sessionId = randomUUID()
     const streamToken = randomUUID()
     const expiresAt = Date.now() + authTtlSec * 1000
@@ -394,7 +443,7 @@ app.post('/sessions/create', async (c) => {
       episodeId,
       streamToken,
       totalPaidSeconds: 0,
-      maxSegmentIndex: -1, // no segments unlocked yet
+      maxSegmentIndex: -1,
       expiresAt,
       createdAt: Date.now(),
     }
@@ -408,6 +457,7 @@ app.post('/sessions/create', async (c) => {
         pricePerSecondShannon: episode.price_per_second.toString(),
         segmentDurationSec,
       },
+      fromCache: false,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to create session'
