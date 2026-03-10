@@ -141,10 +141,14 @@ export function ConnectionErrorModal({ isOpen, onClose, error, rpcUrl, onRequest
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            data-connection-error-modal="true"
           />
 
           {/* Modal Container - centered with scroll support */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+            data-connection-error-modal="true"
+          >
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}

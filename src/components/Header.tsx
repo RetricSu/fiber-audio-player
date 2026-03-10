@@ -86,6 +86,14 @@ export function Header({
   // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
+      const target = event.target as HTMLElement | null;
+
+      // The connection error modal is rendered via portal outside dropdownRef.
+      // Ignore clicks inside it so the dropdown does not unmount the modal.
+      if (target?.closest('[data-connection-error-modal="true"]')) {
+        return;
+      }
+
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsDropdownOpen(false);
       }
