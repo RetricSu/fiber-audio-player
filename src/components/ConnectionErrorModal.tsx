@@ -213,10 +213,10 @@ export function ConnectionErrorModal({ isOpen, onClose, error, rpcUrl, onRequest
                         <p className="text-xs font-mono uppercase tracking-wider text-fiber-muted/95">1. Install</p>
                         <div className="relative">
                           <pre className="p-3 pr-10 rounded-lg bg-black/40 text-xs font-mono text-white/90 overflow-x-auto">
-                            npm install -g @fiber-pay/cli@next
+                            npm install -g @fiber-pay/cli
                           </pre>
                           <button
-                            onClick={() => handleCopy('npm install -g @fiber-pay/cli@next', setCopiedInstall)}
+                            onClick={() => handleCopy('npm install -g @fiber-pay/cli', setCopiedInstall)}
                             className="absolute top-2 right-2 p-1 rounded-md bg-fiber-surface/80 hover:bg-fiber-accent/20 transition-colors"
                             aria-label="Copy install command"
                           >
