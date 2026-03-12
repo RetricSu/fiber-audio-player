@@ -2,20 +2,6 @@
 
 A self-hosted podcast platform with streaming micropayments via Fiber Network (CKB Lightning Network). Creators maintain full ownership of their content and audience relationships while receiving direct payments from listeners.
 
-## Overview
-
-Fiber Audio Player enables content creators to monetize their podcasts through peer-to-peer payment channels. Listeners pay only for what they actually listen to, with payments streamed in real-time as the audio plays. Unlike platform-dependent solutions, you own the entire stack—content, payments, and infrastructure.
-
-### Key Features
-
-- 🎵 **Full-featured audio player** with waveform visualization
-- 💸 **Streaming micropayments** via Fiber Network payment channels
-- 📊 **Live payment history** and analytics dashboard
-- ⚡ **Keysend support** for spontaneous tips without invoices
-- 🔧 **Self-hosted infrastructure** with complete data sovereignty
-- 🤖 **Agent-ready** - integrate AI agents for autonomous operations
-- 🛠️ **CLI tools** for content management and deployment
-
 ## Quick Start
 
 ```bash
@@ -132,13 +118,6 @@ NEXT_PUBLIC_PAYMENT_INTERVAL_MS=10000
                         │  (FFmpeg)        │
                         └──────────────────┘
 ```
-
-## Use Cases
-
-- **Independent Podcasters** - Own your platform and revenue
-- **Premium Content** - Pay-per-minute or subscription models
-- **Direct Fan Support** - Receive tips without platform fees
-- **Agent-Operated** - AI agents manage infrastructure autonomously
 
 ## Resources
 
