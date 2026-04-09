@@ -158,11 +158,16 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
     const targetPeerId = extractPeerIdFromMultiaddr(bootnodeMultiaddr);
 
     const peersBefore = await client.listPeers();
-    if (targetPeerId && peersBefore.peers.some((peer) => peer.peer_id === targetPeerId)) {
-      return targetPeerId;
+    if (targetPeerId) {
+      const existingPeer = peersBefore.peers.find(
+        (peer) => extractPeerIdFromMultiaddr(peer.address) === targetPeerId
+      );
+      if (existingPeer?.pubkey) {
+        return existingPeer.pubkey;
+      }
     }
 
-    const peerIdsBefore = new Set(peersBefore.peers.map((peer) => peer.peer_id));
+    const peerPubkeysBefore = new Set(peersBefore.peers.map((peer) => peer.pubkey));
 
     try {
       await client.connectPeer({ address: bootnodeMultiaddr, save: true });
@@ -173,18 +178,23 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
     for (let attempt = 0; attempt < 6; attempt++) {
       const peersAfter = await client.listPeers();
 
-      if (targetPeerId && peersAfter.peers.some((peer) => peer.peer_id === targetPeerId)) {
-        return targetPeerId;
+      if (targetPeerId) {
+        const matchedPeer = peersAfter.peers.find(
+          (peer) => extractPeerIdFromMultiaddr(peer.address) === targetPeerId
+        );
+        if (matchedPeer?.pubkey) {
+          return matchedPeer.pubkey;
+        }
       }
 
-      const newlyConnected = peersAfter.peers.find((peer) => !peerIdsBefore.has(peer.peer_id));
+      const newlyConnected = peersAfter.peers.find((peer) => !peerPubkeysBefore.has(peer.pubkey));
 
-      if (newlyConnected?.peer_id) {
-        return newlyConnected.peer_id;
+      if (newlyConnected?.pubkey) {
+        return newlyConnected.pubkey;
       }
 
       if (peersAfter.peers.length === 1) {
-        return peersAfter.peers[0].peer_id;
+        return peersAfter.peers[0].pubkey;
       }
 
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -286,8 +296,8 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
         const client = clientRef.current;
         const testAmount = toHex(ckbToShannon(amount));
 
-        const bootnodePeerId = await ensureBootnodePeerConnected();
-        if (bootnodeMultiaddr && !bootnodePeerId) {
+        const bootnodePubkey = await ensureBootnodePeerConnected();
+        if (bootnodeMultiaddr && !bootnodePubkey) {
           setChannelStatus('no_route');
           setChannelError(
             'Cannot connect to the public bootnode. Check NEXT_PUBLIC_BOOTNODE_MULTIADDR and make sure the node is reachable.'
@@ -387,8 +397,8 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
         const client = clientRef.current;
         const fundingAmount = toHex(ckbToShannon(fundingAmountCkb));
 
-        const bootnodePeerId = await ensureBootnodePeerConnected();
-        if (!bootnodePeerId) {
+        const bootnodePubkey = await ensureBootnodePeerConnected();
+        if (!bootnodePubkey) {
           throw new Error(
             'Failed to connect to public bootnode peer. Ensure NEXT_PUBLIC_BOOTNODE_MULTIADDR is reachable and the public node is online.'
           );
@@ -399,7 +409,7 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
 
         // Open channel directly to the connected public bootnode peer.
         await client.openChannel({
-          peer_id: bootnodePeerId,
+          pubkey: bootnodePubkey as `0x${string}`,
           funding_amount: fundingAmount as `0x${string}`,
           public: true,
         });
@@ -424,7 +434,7 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
           await new Promise((resolve) => setTimeout(resolve, pollInterval));
 
           const channelResult = await client.listChannels();
-          const peerChannels = channelResult.channels.filter((channel) => channel.peer_id === bootnodePeerId);
+          const peerChannels = channelResult.channels.filter((channel) => channel.pubkey === bootnodePubkey);
           const newPeerChannels = peerChannels.filter(
             (channel) => !existingChannelIds.has(channel.channel_id)
           );

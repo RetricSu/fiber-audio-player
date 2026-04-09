@@ -253,7 +253,7 @@ export function NodeStatus({
                 Node ID
               </p>
               <p className="text-xs font-mono text-white/90 truncate">
-                {nodeInfo.node_id}
+                {nodeInfo.pubkey}
               </p>
             </div>
 

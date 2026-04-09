@@ -342,7 +342,7 @@ app.get('/node-info', async (c) => {
       ok: true,
       node: {
         nodeName: info.node_name,
-        nodeId: info.node_id,
+        nodeId: info.pubkey,
         addresses: info.addresses,
         openChannelAutoAcceptMin: info.open_channel_auto_accept_min_ckb_funding_amount,
       },
@@ -1682,6 +1682,13 @@ app.post('/admin/episodes/:id/status', async (c) => {
   const { status } = validation.data
 
   try {
+    if (status === 'published') {
+      return c.json(
+        { ok: false, error: 'Use /admin/episodes/:id/publish to publish an episode' },
+        400
+      )
+    }
+
     const info = getDb().prepare('UPDATE episodes SET status = ? WHERE id = ?').run(status, id)
 
     if (info.changes === 0) {
