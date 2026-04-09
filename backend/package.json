@@ -14,7 +14,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@fiber-pay/sdk": "0.1.0-rc.5",
+    "@fiber-pay/sdk": "0.2.0",
     "@hono/node-server": "^1.19.4",
     "@noble/hashes": "^2.0.1",
     "better-sqlite3": "^12.6.2",

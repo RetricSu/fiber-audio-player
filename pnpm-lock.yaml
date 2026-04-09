@@ -4,16 +4,13 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-overrides:
-  '@fiber-pay/sdk': link:../fiber-pay/packages/sdk
-
 importers:
 
   .:
     dependencies:
       '@fiber-pay/sdk':
-        specifier: link:../fiber-pay/packages/sdk
-        version: link:../fiber-pay/packages/sdk
+        specifier: 0.2.0
+        version: 0.2.0
       hls.js:
         specifier: ^1.6.13
         version: 1.6.15
@@ -113,8 +110,8 @@ importers:
   backend:
     dependencies:
       '@fiber-pay/sdk':
-        specifier: link:../../fiber-pay/packages/sdk
-        version: link:../../fiber-pay/packages/sdk
+        specifier: 0.2.0
+        version: 0.2.0
       '@hono/node-server':
         specifier: ^1.19.4
         version: 1.19.10(hono@4.12.4)
@@ -368,6 +365,18 @@ packages:
   '@eslint/plugin-kit@0.4.1':
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  '@fiber-pay/sdk@0.2.0':
+    resolution: {integrity: sha512-HwI7CpeX5vFZ4SwIfK+V2jc8KYm5GH0AaLlhOLTG7/ZJzbbyvjRJYNAMO4YHtzZ/UEmBQRfs+DHv7QZinIfUgg==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@nervosnetwork/fiber-js': ~0.8.0
+      express: ^4.0.0 || ^5.0.0
+    peerDependenciesMeta:
+      '@nervosnetwork/fiber-js':
+        optional: true
+      express:
+        optional: true
 
   '@hono/node-server@1.19.10':
     resolution: {integrity: sha512-hZ7nOssGqRgyV3FVVQdfi+U4q02uB23bpnYpdvNXkYTRRyWx84b7yf1ans+dnJ/7h41sGL3CeQTfO+ZGxuO+Iw==}
@@ -2059,6 +2068,9 @@ packages:
     resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
     hasBin: true
 
+  macaroon@3.0.4:
+    resolution: {integrity: sha512-Tja2jvupseKxltPZbu5RPSz2Pgh6peYA3O46YCTcYL8PI1VqtGwDqRhGfP8pows26xx9wTiygk+en62Bq+Y8JA==}
+
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
 
@@ -2562,6 +2574,9 @@ packages:
   simple-get@4.0.1:
     resolution: {integrity: sha512-brv7p5WgH0jmQJr1ZDDfKDOSeWWg+OVypG99A/5vYGPqJ6pxiaHLy8nxtFjBA7oMa01ebA9gfh1uMCFqOuXxvA==}
 
+  sjcl@1.0.9:
+    resolution: {integrity: sha512-dWM71tkSHxe7zEZj0/COjtJdmErIxp7UMp8a6D4xx8dTTtJLc4lFL+HAX8s6lvASyQQ2iYMHwa7rhhQq7MT5MA==}
+
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
@@ -2731,6 +2746,12 @@ packages:
 
   tunnel-agent@0.6.0:
     resolution: {integrity: sha512-McnNiV1l8RYeY8tBgEpuodCC1mLUdbSN+CYBL7kJsJNInOP8UjDDEwdk6Mw60vdLLrr5NHKZhMAOSrR2NZuQ+w==}
+
+  tweetnacl-util@0.15.1:
+    resolution: {integrity: sha512-RKJBIj8lySrShN4w6i/BonWp2Z/uxwC3h4y7xsRrpP59ZboCd0GpEVsOnMDYLMmKBpYhb5TgHzZXy7wTfYFBRw==}
+
+  tweetnacl@1.0.3:
+    resolution: {integrity: sha512-6rt+RN7aOi1nGMyC4Xa5DdYiukl2UWCbcJft7YhxReBGQD7OAM8Pbxw6YMo4r2diNEA8FEmu32YOn9rhaiE5yw==}
 
   type-check@0.4.0:
     resolution: {integrity: sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew==}
@@ -3058,6 +3079,12 @@ snapshots:
     dependencies:
       '@eslint/core': 0.17.0
       levn: 0.4.1
+
+  '@fiber-pay/sdk@0.2.0':
+    dependencies:
+      '@noble/hashes': 2.0.1
+      macaroon: 3.0.4
+      zod: 4.3.6
 
   '@hono/node-server@1.19.10(hono@4.12.4)':
     dependencies:
@@ -4764,6 +4791,12 @@ snapshots:
     dependencies:
       js-tokens: 4.0.0
 
+  macaroon@3.0.4:
+    dependencies:
+      sjcl: 1.0.9
+      tweetnacl: 1.0.3
+      tweetnacl-util: 0.15.1
+
   magic-string@0.30.21:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
@@ -5337,6 +5370,8 @@ snapshots:
       once: 1.4.0
       simple-concat: 1.0.1
 
+  sjcl@1.0.9: {}
+
   source-map-js@1.2.1: {}
 
   stable-hash@0.0.5: {}
@@ -5566,6 +5601,10 @@ snapshots:
   tunnel-agent@0.6.0:
     dependencies:
       safe-buffer: 5.2.1
+
+  tweetnacl-util@0.15.1: {}
+
+  tweetnacl@1.0.3: {}
 
   type-check@0.4.0:
     dependencies:
