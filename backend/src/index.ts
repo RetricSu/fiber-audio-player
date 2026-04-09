@@ -1682,6 +1682,13 @@ app.post('/admin/episodes/:id/status', async (c) => {
   const { status } = validation.data
 
   try {
+    if (status === 'published') {
+      return c.json(
+        { ok: false, error: 'Use /admin/episodes/:id/publish to publish an episode' },
+        400
+      )
+    }
+
     const info = getDb().prepare('UPDATE episodes SET status = ? WHERE id = ?').run(status, id)
 
     if (info.changes === 0) {
