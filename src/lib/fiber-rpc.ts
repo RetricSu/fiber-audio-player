@@ -53,37 +53,39 @@ export class FiberRpcClient extends SdkFiberRpcClient {
     return normalized;
   }
 
-  // Find peer_id (Qm... format) by pubkey
+  // Find connected peer pubkey
   async findPeerIdByPubkey(pubkey: string): Promise<string | null> {
     const result = await this.listPeers();
     const targetPubkey = this.normalizePubkey(pubkey);
     const peer = result.peers.find((p) => this.normalizePubkey(p.pubkey) === targetPubkey);
-    return peer?.peer_id || null;
+    return peer?.pubkey || null;
   }
 
-  // Open channel by pubkey (looks up peer_id first)
+  // Open channel by pubkey (requires connected peer)
   async openChannelByPubkey(
     pubkey: string,
     fundingAmount: string,
     options?: { public?: boolean }
   ): Promise<{ temporary_channel_id: string }> {
-    const peerId = await this.findPeerIdByPubkey(pubkey);
-    if (!peerId) {
+    const connectedPubkey = await this.findPeerIdByPubkey(pubkey);
+    if (!connectedPubkey) {
       throw new Error(
         `Peer not connected. The recipient node (${pubkey.slice(0, 10)}...) is not in your peer list. ` +
         `They need to be connected first.`
       );
     }
     return this.openChannel({
-      peer_id: peerId,
+      pubkey: this.formatRpcPubkey(connectedPubkey) as unknown as `0x${string}`,
       funding_amount: fundingAmount as `0x${string}`,
       public: options?.public,
     });
   }
 
-  // Check if we have a usable channel to a peer
-  async findChannelToPeer(peerId: string): Promise<{ state: { state_name: ChannelState }; local_balance: string } | null> {
-    const result = await this.listChannels({ peer_id: peerId });
+  // Check if we have a usable channel to a peer pubkey
+  async findChannelToPeer(peerPubkey: string): Promise<{ state: { state_name: ChannelState }; local_balance: string } | null> {
+    const result = await this.listChannels({
+      pubkey: this.formatRpcPubkey(peerPubkey) as unknown as `0x${string}`,
+    });
     const readyChannel = result.channels.find(
       (ch) => ch.state.state_name === ChannelState.ChannelReady && BigInt(ch.local_balance) > 0n
     );

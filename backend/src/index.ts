@@ -342,7 +342,7 @@ app.get('/node-info', async (c) => {
       ok: true,
       node: {
         nodeName: info.node_name,
-        nodeId: info.node_id,
+        nodeId: info.pubkey,
         addresses: info.addresses,
         openChannelAutoAcceptMin: info.open_channel_auto_accept_min_ckb_funding_amount,
       },
