@@ -3,8 +3,9 @@
 import { ReactNode, useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { ChannelStatus } from '@/hooks/use-fiber-node';
-import { NodeInfo } from '@/lib/fiber-rpc';
+import { NodeInfo, scriptToAddress } from '@/lib/fiber-rpc';
 import { ConnectionErrorModal } from './ConnectionErrorModal';
+import QRCode from 'qrcode';
 
 interface NodeStatusProps {
   isConnected: boolean;
@@ -27,6 +28,7 @@ interface NodeStatusProps {
   isFundingSufficient?: boolean;
   fundingBalanceError?: string | null;
   faucetUrl?: string;
+  fundingNetwork?: 'testnet' | 'mainnet';
   onCheckRoute?: () => void;
   onOpenChannel?: () => void;
   onCancelSetup?: () => void;
@@ -56,6 +58,7 @@ export function NodeStatus({
   isFundingSufficient = false,
   fundingBalanceError,
   faucetUrl,
+  fundingNetwork = 'testnet',
   onCheckRoute,
   onOpenChannel,
   onCancelSetup,
@@ -65,7 +68,13 @@ export function NodeStatus({
   onRequestEditUrl,
 }: NodeStatusProps) {
   const [showErrorModal, setShowErrorModal] = useState(false);
+  const [fundingAddress, setFundingAddress] = useState<string | null>(null);
+  const [fundingAddressError, setFundingAddressError] = useState<string | null>(null);
+  const [fundingQrDataUrl, setFundingQrDataUrl] = useState<string | null>(null);
+  const [fundingQrError, setFundingQrError] = useState<string | null>(null);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const wasConnectingRef = useRef(false);
+  const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Show error modal only once per failed connect attempt.
   useEffect(() => {
@@ -81,6 +90,92 @@ export function NodeStatus({
 
     wasConnectingRef.current = isConnecting;
   }, [error, isConnecting, isConnected]);
+
+  useEffect(() => {
+    if (!isConnected || !nodeInfo) {
+      setFundingAddress(null);
+      setFundingAddressError(null);
+      return;
+    }
+
+    try {
+      const address = scriptToAddress(nodeInfo.default_funding_lock_script, fundingNetwork);
+      setFundingAddress(address);
+      setFundingAddressError(null);
+    } catch (err) {
+      setFundingAddress(null);
+      setFundingAddressError(err instanceof Error ? err.message : 'Failed to derive funding address');
+    }
+  }, [fundingNetwork, isConnected, nodeInfo]);
+
+  useEffect(() => {
+    let canceled = false;
+
+    const buildQrCode = async () => {
+      if (!fundingAddress) {
+        setFundingQrDataUrl(null);
+        setFundingQrError(null);
+        return;
+      }
+
+      try {
+        setFundingQrError(null);
+        const dataUrl = await QRCode.toDataURL(fundingAddress, {
+          width: 160,
+          margin: 1,
+          errorCorrectionLevel: 'M',
+          color: {
+            dark: '#e8f0ff',
+            light: '#00000000',
+          },
+        });
+
+        if (!canceled) {
+          setFundingQrDataUrl(dataUrl);
+        }
+      } catch {
+        if (!canceled) {
+          setFundingQrDataUrl(null);
+          setFundingQrError('Failed to generate funding QR code. You can still copy the address manually.');
+        }
+      }
+    };
+
+    void buildQrCode();
+
+    return () => {
+      canceled = true;
+    };
+  }, [fundingAddress]);
+
+  useEffect(() => {
+    return () => {
+      if (copyResetTimerRef.current) {
+        clearTimeout(copyResetTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleCopyFundingAddress = async () => {
+    if (!fundingAddress) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(fundingAddress);
+      setCopyStatus('copied');
+    } catch {
+      setCopyStatus('failed');
+    }
+
+    if (copyResetTimerRef.current) {
+      clearTimeout(copyResetTimerRef.current);
+    }
+
+    copyResetTimerRef.current = setTimeout(() => {
+      setCopyStatus('idle');
+    }, 2000);
+  };
 
   const handleConnectToggle = () => {
     if (isConnected) {
@@ -234,6 +329,79 @@ export function NodeStatus({
               </div>
             )}
 
+            {!isFundingSufficient && (
+              <div className="p-3 rounded-lg bg-fiber-warning/10 border border-fiber-warning/30 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-fiber-warning font-mono uppercase tracking-wider">
+                    Funding Top-up Needed
+                  </p>
+                  <span className="text-[11px] text-fiber-muted/95 font-mono uppercase tracking-wider">
+                    {fundingNetwork}
+                  </span>
+                </div>
+
+                <p className="text-xs text-fiber-muted/95">
+                  Funding balance is below <span className="text-white/95">{fundingAmountCkb} CKB</span>. Deposit more CKB to this address before opening a channel.
+                </p>
+
+                {fundingAddress ? (
+                  <>
+                    <div className="rounded-lg border border-fiber-border/70 bg-fiber-dark/80 p-2.5">
+                      <p className="text-[11px] text-fiber-muted/95 font-mono uppercase tracking-wider mb-1.5">
+                        Deposit Address
+                      </p>
+                      <p className="text-[11px] text-white/95 font-mono break-all leading-relaxed">
+                        {fundingAddress}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleCopyFundingAddress}
+                        className="px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-wider rounded border border-fiber-accent/60 text-fiber-accent hover:bg-fiber-accent/20 transition-colors"
+                      >
+                        {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Copy Failed' : 'Copy Address'}
+                      </button>
+
+                      {faucetUrl && (
+                        <a
+                          href={faucetUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-wider rounded border border-fiber-warning/40 text-fiber-warning hover:bg-fiber-warning/10 transition-colors"
+                        >
+                          Go to Faucet
+                        </a>
+                      )}
+                    </div>
+
+                    {fundingQrDataUrl && (
+                      <div className="inline-flex flex-col gap-1.5 rounded-lg border border-fiber-border/70 bg-fiber-dark/80 p-2">
+                        <p className="text-[10px] text-fiber-muted/95 font-mono uppercase tracking-wider">
+                          Scan to Deposit
+                        </p>
+                        <img
+                          src={fundingQrDataUrl}
+                          alt="Funding address QR code"
+                          className="w-40 h-40 rounded bg-white/5"
+                        />
+                      </div>
+                    )}
+
+                    {fundingQrError && (
+                      <p className="text-xs text-red-300/90 font-mono">{fundingQrError}</p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-xs text-red-300/90 font-mono">
+                    Unable to derive deposit address from funding lock script.
+                    {fundingAddressError ? ` ${fundingAddressError}` : ''}
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="p-3 rounded-lg bg-fiber-dark/75 border border-fiber-border/60">
               <p className="text-xs text-fiber-muted/95 font-mono uppercase tracking-wider mb-1">
                 Node ID
@@ -348,7 +516,7 @@ export function NodeStatus({
             {!isFundingSufficient && (channelStatus === 'no_route' || channelStatus === 'error') && (
               <div className="mb-2 p-2 rounded-lg bg-red-500/10 border border-red-500/30">
                 <p className="text-xs text-red-400">
-                  Funding balance is below {fundingAmountCkb} CKB. Please top up from faucet first before opening a channel.
+                  Funding balance is below {fundingAmountCkb} CKB. Please top up first before opening a channel.
                   {faucetUrl && (
                     <>
                       {' '}
