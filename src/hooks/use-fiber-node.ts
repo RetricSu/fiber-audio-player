@@ -116,6 +116,7 @@ interface JsonRpcResponse<T> {
 interface UseFiberNodeOptions {
   recipientPubkey?: string;
   bootnodeMultiaddr?: string;
+  browserBootnodeMultiaddr?: string;
   mode?: NodeConnectionMode;
   passkeyDisplayName?: string;
   browserNetwork?: 'testnet' | 'mainnet';
@@ -160,8 +161,17 @@ function createBrowserRuntimeClient(node: FiberBrowserNode): FiberRuntimeClient 
 }
 
 export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}): UseFiberNodeResult {
-  const bootnodeMultiaddr = options.bootnodeMultiaddr?.trim() || '';
   const mode = options.mode ?? 'local-rpc';
+  const localBootnodeMultiaddr = options.bootnodeMultiaddr?.trim() || '';
+  const browserBootnodeMultiaddr = options.browserBootnodeMultiaddr?.trim() || '';
+  const activeBootnodeMultiaddr =
+    mode === 'browser-passkey'
+      ? browserBootnodeMultiaddr || localBootnodeMultiaddr
+      : localBootnodeMultiaddr;
+  const activeBootnodeEnvHint =
+    mode === 'browser-passkey'
+      ? 'NEXT_PUBLIC_BOOTNODE_MULTIADDR_BROWSER (fallback NEXT_PUBLIC_BOOTNODE_MULTIADDR)'
+      : 'NEXT_PUBLIC_BOOTNODE_MULTIADDR';
   const passkeyDisplayName = options.passkeyDisplayName?.trim() || 'Fiber Audio Listener';
   const browserNetwork = options.browserNetwork ?? 'testnet';
 
@@ -286,11 +296,11 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
 
   const ensureBootnodePeerConnected = useCallback(async (): Promise<string | null> => {
     const client = clientRef.current;
-    if (!client || !bootnodeMultiaddr) {
+    if (!client || !activeBootnodeMultiaddr) {
       return null;
     }
 
-    const targetPeerId = extractPeerIdFromMultiaddr(bootnodeMultiaddr);
+    const targetPeerId = extractPeerIdFromMultiaddr(activeBootnodeMultiaddr);
 
     const peersBefore = await client.listPeers();
     if (targetPeerId) {
@@ -305,7 +315,7 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
     const peerPubkeysBefore = new Set(peersBefore.peers.map((peer) => peer.pubkey));
 
     try {
-      await client.connectPeer({ address: bootnodeMultiaddr, save: true });
+      await client.connectPeer({ address: activeBootnodeMultiaddr, save: true });
     } catch {
       // Some runtimes return an error if already connected; we'll verify via listPeers below.
     }
@@ -336,7 +346,7 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
     }
 
     return null;
-  }, [bootnodeMultiaddr]);
+  }, [activeBootnodeMultiaddr]);
 
   const connect = useCallback(async () => {
     setIsConnecting(true);
@@ -363,7 +373,7 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
           credential,
           nodeConfig: {
             ckbRpcUrl: CKB_RPC_URL,
-            bootnodes: bootnodeMultiaddr ? [bootnodeMultiaddr] : undefined,
+            bootnodes: activeBootnodeMultiaddr ? [activeBootnodeMultiaddr] : undefined,
             databasePrefix: `fiber-audio-${PASSKEY_IDENTIFIER}`,
           },
         });
@@ -399,7 +409,7 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
       const peersResult = await client.listPeers();
       setPeers(peersResult.peers || []);
 
-      if (bootnodeMultiaddr) {
+      if (activeBootnodeMultiaddr) {
         await ensureBootnodePeerConnected();
         const refreshedPeersResult = await client.listPeers();
         setPeers(refreshedPeersResult.peers || []);
@@ -424,7 +434,7 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
     passkeySupported,
     passkeyDisplayName,
     browserNetwork,
-    bootnodeMultiaddr,
+    activeBootnodeMultiaddr,
     rpcUrl,
     ensureBootnodePeerConnected,
     fetchFundingBalance,
@@ -498,10 +508,10 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
         const testAmount = toHex(ckbToShannon(amount));
 
         const bootnodePubkey = await ensureBootnodePeerConnected();
-        if (bootnodeMultiaddr && !bootnodePubkey) {
+        if (activeBootnodeMultiaddr && !bootnodePubkey) {
           setChannelStatus('no_route');
           setChannelError(
-            'Cannot connect to the public bootnode. Check NEXT_PUBLIC_BOOTNODE_MULTIADDR and make sure the node is reachable.'
+            `Cannot connect to the public bootnode. Check ${activeBootnodeEnvHint} and make sure the node is reachable.`
           );
           return false;
         }
@@ -552,7 +562,7 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
         return false;
       }
     },
-    [bootnodeMultiaddr, clearChannelTimer, ensureBootnodePeerConnected]
+    [activeBootnodeEnvHint, activeBootnodeMultiaddr, clearChannelTimer, ensureBootnodePeerConnected]
   );
 
   const cancelChannelSetup = useCallback(() => {
@@ -572,8 +582,8 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
         return false;
       }
 
-      if (!bootnodeMultiaddr) {
-        setChannelError('Public node address is not configured. Set NEXT_PUBLIC_BOOTNODE_MULTIADDR first.');
+      if (!activeBootnodeMultiaddr) {
+        setChannelError(`Public node address is not configured. Set ${activeBootnodeEnvHint} first.`);
         setChannelStatus('error');
         return false;
       }
@@ -601,7 +611,7 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
         const bootnodePubkey = await ensureBootnodePeerConnected();
         if (!bootnodePubkey) {
           throw new Error(
-            'Failed to connect to public bootnode peer. Ensure NEXT_PUBLIC_BOOTNODE_MULTIADDR is reachable and the public node is online.'
+            `Failed to connect to public bootnode peer. Ensure ${activeBootnodeEnvHint} is reachable and the public node is online.`
           );
         }
 
@@ -687,7 +697,7 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
         if (normalizedError.includes('peer not connected') || normalizedError.includes('not in your peer list')) {
           setChannelError(
             `Cannot open channel: Public bootnode peer not connected. ` +
-            `Check NEXT_PUBLIC_BOOTNODE_MULTIADDR and make sure the public node is reachable.`
+            `Check ${activeBootnodeEnvHint} and make sure the public node is reachable.`
           );
         } else if (normalizedError.includes('insufficient') || normalizedError.includes('balance') || normalizedError.includes('fund')) {
           setChannelError(
@@ -702,7 +712,8 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
       }
     },
     [
-      bootnodeMultiaddr,
+      activeBootnodeEnvHint,
+      activeBootnodeMultiaddr,
       clearChannelTimer,
       ensureBootnodePeerConnected,
       fundingBalanceCkb,
