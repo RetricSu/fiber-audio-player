@@ -8,7 +8,7 @@ import { PaymentHistory } from '@/components/PaymentHistory';
 import { PodcastList, Podcast } from '@/components/PodcastList';
 import { EpisodeList } from '@/components/EpisodeList';
 import { Episode } from '@/components/EpisodeCard';
-import { useFiberNode } from '@/hooks/use-fiber-node';
+import { useFiberNode, type NodeConnectionMode } from '@/hooks/use-fiber-node';
 import { useStreamingPayment } from '@/hooks/use-streaming-payment';
 import { getBackendNodeInfo } from '@/lib/stream-auth';
 
@@ -20,7 +20,7 @@ const FAUCET_URL = 'https://testnet.ckbapp.dev/';
 const BOOTNODE_MULTIADDR = process.env.NEXT_PUBLIC_BOOTNODE_MULTIADDR || '';
 
 // Default cover image for episodes
-const DEFAULT_COVER_URL = 'https://images.unsplash.com/photo-1614680376593-902f74cf0d41?w=400&h=400&fit=crop&auto=format';
+const DEFAULT_COVER_URL = '/default-cover.svg';
 
 /**
  * Convert backend Episode to AudioPlayer Episode format
@@ -64,37 +64,52 @@ function toAudioPlayerEpisode(episode: Episode): {
 
 export default function Home() {
   const [rpcUrl, setRpcUrl] = useState(DEFAULT_RPC_URL);
+  const [nodeMode, setNodeMode] = useState<NodeConnectionMode>('local-rpc');
+  const [passkeyDisplayName, setPasskeyDisplayName] = useState('Fiber Audio Listener');
   const [selectedPodcast, setSelectedPodcast] = useState<Podcast | null>(null);
   const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
   const [isNodeDropdownOpen, setIsNodeDropdownOpen] = useState(false);
 
-  // Auto-fetch the developer node's pubkey from backend /node-info
+  // Source of truth: backend /node-info
   const [recipientPubkey, setRecipientPubkey] = useState('');
   const [backendError, setBackendError] = useState<string | null>(null);
 
   useEffect(() => {
     getBackendNodeInfo()
       .then((info) => {
-        setRecipientPubkey(info.nodeId);
+        setRecipientPubkey((info.nodeId || '').trim());
         setBackendError(null);
       })
       .catch((err) => {
-        setBackendError(err instanceof Error ? err.message : 'Failed to reach backend');
+        setRecipientPubkey('');
+        setBackendError(err instanceof Error ? err.message : 'Failed to reach backend /node-info');
       });
   }, []);
 
   const fiberNode = useFiberNode(rpcUrl, {
     recipientPubkey,
     bootnodeMultiaddr: BOOTNODE_MULTIADDR,
+    mode: nodeMode,
+    passkeyDisplayName,
+    browserNetwork: 'testnet',
   });
 
   const payment = useStreamingPayment({
     rpcUrl,
     recipientPubkey,
+    paymentClient: fiberNode.paymentClient,
     ratePerSecond: selectedEpisode 
       ? parseFloat(selectedEpisode.price_per_second) / 100_000_000 
       : 0.0001,
   });
+
+  const handleNodeModeChange = (nextMode: NodeConnectionMode) => {
+    if (nextMode === nodeMode) return;
+    if (fiberNode.isConnected) {
+      fiberNode.disconnect();
+    }
+    setNodeMode(nextMode);
+  };
 
   const handlePodcastSelect = (podcast: Podcast) => {
     setSelectedPodcast(podcast);
@@ -144,6 +159,13 @@ export default function Home() {
         onCancelSetup={fiberNode.cancelChannelSetup}
         rpcUrlValue={rpcUrl}
         onRpcUrlChange={setRpcUrl}
+        nodeMode={nodeMode}
+        onNodeModeChange={handleNodeModeChange}
+        passkeyDisplayName={passkeyDisplayName}
+        onPasskeyDisplayNameChange={setPasskeyDisplayName}
+        passkeySupported={fiberNode.passkeySupported}
+        passkeyConfigured={fiberNode.passkeyConfigured}
+        browserNodeState={fiberNode.browserNodeState}
         backendError={backendError}
         isDropdownOpen={isNodeDropdownOpen}
         onDropdownOpenChange={setIsNodeDropdownOpen}

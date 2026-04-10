@@ -1,7 +1,23 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
-import { FiberRpcClient, NodeInfo, Channel, PeerInfo, ChannelState, toHex, fromHex, ckbToShannon, formatShannon } from '@/lib/fiber-rpc';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import {
+  FiberRpcClient,
+  NodeInfo,
+  Channel,
+  PeerInfo,
+  ChannelState,
+  toHex,
+  fromHex,
+  ckbToShannon,
+  formatShannon,
+} from '@/lib/fiber-rpc';
+import {
+  FiberBrowserNode,
+  PasskeyCredentialProvider,
+  type BrowserNodeState,
+} from '@fiber-pay/sdk/browser';
+import type { StreamingPaymentClient } from '@/lib/streaming-payment';
 
 export type ChannelStatus =
   | 'idle'
@@ -11,6 +27,28 @@ export type ChannelStatus =
   | 'waiting_confirmation'
   | 'ready'
   | 'error';
+
+export type NodeConnectionMode = 'local-rpc' | 'browser-passkey';
+
+interface ReadyChannelSummary {
+  state: { state_name: ChannelState };
+  local_balance: string;
+}
+
+interface FiberRuntimeClient extends StreamingPaymentClient {
+  nodeInfo: () => Promise<NodeInfo>;
+  listChannels: (params?: { pubkey?: `0x${string}` }) => Promise<{ channels: Channel[] }>;
+  listPeers: () => Promise<{ peers: PeerInfo[] }>;
+  connectPeer: (params: { address: string; save?: boolean }) => Promise<unknown>;
+  openChannel: (params: {
+    pubkey: `0x${string}`;
+    funding_amount: `0x${string}`;
+    public?: boolean;
+  }) => Promise<unknown>;
+  findPeerIdByPubkey: (pubkey: string) => Promise<string | null>;
+  findChannelToPeer: (peerPubkey: string) => Promise<ReadyChannelSummary | null>;
+  checkPaymentRoute: (targetPubkey: string, amount: string) => Promise<boolean>;
+}
 
 export interface UseFiberNodeResult {
   isConnected: boolean;
@@ -22,6 +60,11 @@ export interface UseFiberNodeResult {
   connect: () => Promise<void>;
   disconnect: () => void;
   refresh: () => Promise<void>;
+  paymentClient: StreamingPaymentClient | null;
+  // Browser passkey mode diagnostics
+  passkeySupported: boolean | null;
+  passkeyConfigured: boolean;
+  browserNodeState: BrowserNodeState;
   // Channel setup
   channelStatus: ChannelStatus;
   channelError: string | null;
@@ -39,6 +82,19 @@ export interface UseFiberNodeResult {
 
 const DEFAULT_FUNDING_AMOUNT_CKB = 1000; // 1000 CKB default funding
 const CKB_RPC_URL = 'https://testnet.ckbapp.dev/';
+const PASSKEY_IDENTIFIER = 'fiber-audio-browser-node';
+
+function normalizePubkey(pubkey: string): string {
+  return pubkey.trim().replace(/^0x/i, '').toLowerCase();
+}
+
+function formatRpcPubkey(pubkey: string): string {
+  const normalized = normalizePubkey(pubkey);
+  if (!/^[0-9a-f]{66}$/.test(normalized)) {
+    throw new Error('Invalid recipient pubkey format. Expected 33-byte compressed secp256k1 pubkey hex.');
+  }
+  return normalized;
+}
 
 function extractPeerIdFromMultiaddr(multiaddr: string): string | null {
   const match = multiaddr.match(/\/(?:p2p|ipfs)\/([^/]+)/i);
@@ -60,18 +116,69 @@ interface JsonRpcResponse<T> {
 interface UseFiberNodeOptions {
   recipientPubkey?: string;
   bootnodeMultiaddr?: string;
+  mode?: NodeConnectionMode;
+  passkeyDisplayName?: string;
+  browserNetwork?: 'testnet' | 'mainnet';
+}
+
+function createBrowserRuntimeClient(node: FiberBrowserNode): FiberRuntimeClient {
+  const runtimeClient: FiberRuntimeClient = {
+    nodeInfo: () => node.getNodeInfo(),
+    listChannels: (params) => node.listChannels(params),
+    listPeers: () => node.listPeers(),
+    connectPeer: (params) => node.connectPeer(params),
+    openChannel: (params) => node.openChannel(params),
+    sendPayment: (params) => node.sendPayment(params),
+    waitForPayment: (paymentHash, options) => node.waitForPayment(paymentHash, options),
+    findPeerIdByPubkey: async (pubkey: string): Promise<string | null> => {
+      const result = await node.listPeers();
+      const targetPubkey = normalizePubkey(pubkey);
+      const peer = result.peers.find((p) => normalizePubkey(p.pubkey) === targetPubkey);
+      return peer?.pubkey || null;
+    },
+    findChannelToPeer: async (peerPubkey: string): Promise<ReadyChannelSummary | null> => {
+      const result = await node.listChannels({
+        pubkey: formatRpcPubkey(peerPubkey) as unknown as `0x${string}`,
+      });
+      const readyChannel = result.channels.find(
+        (ch) => ch.state.state_name === ChannelState.ChannelReady && BigInt(ch.local_balance) > 0n
+      );
+      return readyChannel || null;
+    },
+    checkPaymentRoute: async (targetPubkey: string, amount: string): Promise<boolean> => {
+      const result = await node.sendPayment({
+        target_pubkey: formatRpcPubkey(targetPubkey) as unknown as `0x${string}`,
+        amount: amount as `0x${string}`,
+        keysend: true,
+        dry_run: true,
+      });
+      return result.status !== 'Failed';
+    },
+  };
+
+  return runtimeClient;
 }
 
 export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}): UseFiberNodeResult {
-  const recipientPubkey = options.recipientPubkey?.trim() || '';
   const bootnodeMultiaddr = options.bootnodeMultiaddr?.trim() || '';
+  const mode = options.mode ?? 'local-rpc';
+  const passkeyDisplayName = options.passkeyDisplayName?.trim() || 'Fiber Audio Listener';
+  const browserNetwork = options.browserNetwork ?? 'testnet';
+
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [nodeInfo, setNodeInfo] = useState<NodeInfo | null>(null);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [peers, setPeers] = useState<PeerInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const clientRef = useRef<FiberRpcClient | null>(null);
+  const [paymentClient, setPaymentClient] = useState<StreamingPaymentClient | null>(null);
+
+  const [passkeySupported, setPasskeySupported] = useState<boolean | null>(null);
+  const [passkeyConfigured, setPasskeyConfigured] = useState(false);
+  const [browserNodeState, setBrowserNodeState] = useState<BrowserNodeState>('idle');
+
+  const clientRef = useRef<FiberRuntimeClient | null>(null);
+  const browserNodeRef = useRef<FiberBrowserNode | null>(null);
 
   // Channel status
   const [channelStatus, setChannelStatus] = useState<ChannelStatus>('idle');
@@ -83,6 +190,34 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
   const [fundingBalanceError, setFundingBalanceError] = useState<string | null>(null);
   const channelSetupCanceledRef = useRef(false);
   const channelTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    let disposed = false;
+
+    const probe = async () => {
+      try {
+        const supported = await PasskeyCredentialProvider.isSupported();
+        if (!disposed) {
+          setPasskeySupported(supported);
+        }
+      } catch {
+        if (!disposed) {
+          setPasskeySupported(false);
+        }
+      }
+
+      if (!disposed) {
+        const provider = new PasskeyCredentialProvider(PASSKEY_IDENTIFIER);
+        setPasskeyConfigured(provider.isConfigured());
+      }
+    };
+
+    probe();
+
+    return () => {
+      disposed = true;
+    };
+  }, []);
 
   const clearChannelTimer = useCallback(() => {
     if (channelTimerRef.current) {
@@ -208,8 +343,51 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
     setError(null);
 
     try {
-      const client = new FiberRpcClient({ url: rpcUrl, timeout: 10000 });
+      let client: FiberRuntimeClient;
+
+      if (mode === 'browser-passkey') {
+        if (passkeySupported === false) {
+          throw new Error('Passkey PRF extension is not supported in this browser or context.');
+        }
+
+        const credential = new PasskeyCredentialProvider(PASSKEY_IDENTIFIER);
+
+        if (!credential.isConfigured()) {
+          await credential.register(passkeyDisplayName);
+        }
+
+        setPasskeyConfigured(credential.isConfigured());
+
+        const browserNode = new FiberBrowserNode({
+          network: browserNetwork,
+          credential,
+          nodeConfig: {
+            ckbRpcUrl: CKB_RPC_URL,
+            bootnodes: bootnodeMultiaddr ? [bootnodeMultiaddr] : undefined,
+            databasePrefix: `fiber-audio-${PASSKEY_IDENTIFIER}`,
+          },
+        });
+
+        browserNode.on('stateChange', (state) => {
+          setBrowserNodeState(state);
+        });
+        browserNode.on('error', (err) => {
+          setError(err.message);
+        });
+
+        browserNodeRef.current = browserNode;
+        setBrowserNodeState(browserNode.state);
+
+        await browserNode.start();
+
+        client = createBrowserRuntimeClient(browserNode);
+      } else {
+        const localClient = new FiberRpcClient({ url: rpcUrl, timeout: 10000 });
+        client = localClient as unknown as FiberRuntimeClient;
+      }
+
       clientRef.current = client;
+      setPaymentClient(client);
 
       const info = await client.nodeInfo();
       setNodeInfo(info);
@@ -231,13 +409,36 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to connect to Fiber node');
       setIsConnected(false);
+      setPaymentClient(null);
+      clientRef.current = null;
+      if (browserNodeRef.current) {
+        await browserNodeRef.current.stop().catch(() => {});
+        browserNodeRef.current = null;
+        setBrowserNodeState('idle');
+      }
     } finally {
       setIsConnecting(false);
     }
-  }, [bootnodeMultiaddr, ensureBootnodePeerConnected, fetchFundingBalance, rpcUrl]);
+  }, [
+    mode,
+    passkeySupported,
+    passkeyDisplayName,
+    browserNetwork,
+    bootnodeMultiaddr,
+    rpcUrl,
+    ensureBootnodePeerConnected,
+    fetchFundingBalance,
+  ]);
 
   const disconnect = useCallback(() => {
+    if (browserNodeRef.current) {
+      void browserNodeRef.current.stop().catch(() => {});
+      browserNodeRef.current = null;
+      setBrowserNodeState('idle');
+    }
+
     clientRef.current = null;
+    setPaymentClient(null);
     setIsConnected(false);
     setNodeInfo(null);
     setChannels([]);
@@ -522,6 +723,10 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
     connect,
     disconnect,
     refresh,
+    paymentClient,
+    passkeySupported,
+    passkeyConfigured,
+    browserNodeState,
     channelStatus,
     channelError,
     channelStateName,

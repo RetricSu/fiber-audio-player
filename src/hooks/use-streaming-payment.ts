@@ -72,6 +72,7 @@ export function useStreamingPayment(
     config.rpcUrl,
     config.recipientPubkey,
     config.ratePerSecond,
+    config.paymentClient,
   ]);
 
   const start = useCallback(async (episodeId?: string, seconds: number = 30): Promise<StreamGrant | null> => {

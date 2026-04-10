@@ -10,10 +10,16 @@ import {
   type ClaimInvoiceResponse,
 } from './stream-auth';
 
+export interface StreamingPaymentClient {
+  sendPayment: FiberRpcClient['sendPayment'];
+  waitForPayment: FiberRpcClient['waitForPayment'];
+}
+
 export interface StreamingPaymentConfig {
   rpcUrl: string;
   recipientPubkey: string;
   ratePerSecond: number; // in CKB (display only — actual pricing comes from backend)
+  paymentClient?: StreamingPaymentClient | null;
 }
 
 export interface PaymentTick {
@@ -39,7 +45,7 @@ export interface StreamGrant {
 export type StreamGrantCallback = (grant: StreamGrant) => void;
 
 export class StreamingPaymentService {
-  private client: FiberRpcClient;
+  private client: StreamingPaymentClient;
   private config: StreamingPaymentConfig;
   private isStreaming = false;
   private totalPaid = 0n;
@@ -54,7 +60,7 @@ export class StreamingPaymentService {
 
   constructor(config: StreamingPaymentConfig) {
     this.config = config;
-    this.client = new FiberRpcClient({ url: config.rpcUrl });
+    this.client = config.paymentClient ?? new FiberRpcClient({ url: config.rpcUrl });
   }
 
   onPayment(callback: PaymentCallback): () => void {
