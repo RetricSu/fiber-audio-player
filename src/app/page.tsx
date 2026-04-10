@@ -70,18 +70,19 @@ export default function Home() {
   const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
   const [isNodeDropdownOpen, setIsNodeDropdownOpen] = useState(false);
 
-  // Auto-fetch the developer node's pubkey from backend /node-info
+  // Source of truth: backend /node-info
   const [recipientPubkey, setRecipientPubkey] = useState('');
   const [backendError, setBackendError] = useState<string | null>(null);
 
   useEffect(() => {
     getBackendNodeInfo()
       .then((info) => {
-        setRecipientPubkey(info.nodeId);
+        setRecipientPubkey((info.nodeId || '').trim());
         setBackendError(null);
       })
       .catch((err) => {
-        setBackendError(err instanceof Error ? err.message : 'Failed to reach backend');
+        setRecipientPubkey('');
+        setBackendError(err instanceof Error ? err.message : 'Failed to reach backend /node-info');
       });
   }, []);
 

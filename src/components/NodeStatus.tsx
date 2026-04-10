@@ -309,7 +309,7 @@ export function NodeStatus({
         {!recipientPubkey && isConnected && (
           <div className="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
             <p className="text-xs text-red-400 font-mono">
-              Recipient pubkey not configured. The site owner needs to set NEXT_PUBLIC_RECIPIENT_PUBKEY.
+              Recipient pubkey is unavailable from backend /node-info. Check backend Fiber RPC connectivity and node-info compatibility.
             </p>
           </div>
         )}

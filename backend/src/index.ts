@@ -338,13 +338,33 @@ app.get('/healthz', (c) => c.json({ ok: true, service: 'fiber-audio-backend' }))
 app.get('/node-info', async (c) => {
   try {
     const info = await fiberClient.nodeInfo()
+    const raw = info as unknown as Record<string, unknown>
+    const nodeId =
+      (typeof raw.pubkey === 'string' ? raw.pubkey : null) ??
+      (typeof raw.node_id === 'string' ? raw.node_id : null) ??
+      (typeof raw.nodeId === 'string' ? raw.nodeId : null)
+
+    if (!nodeId) {
+      return c.json(
+        {
+          ok: false,
+          error:
+            'Fiber node info is missing identifier field (pubkey/node_id). Check FNN version and SDK compatibility.',
+        },
+        502,
+      )
+    }
+
     return c.json({
       ok: true,
       node: {
-        nodeName: info.node_name,
-        nodeId: info.pubkey,
-        addresses: info.addresses,
-        openChannelAutoAcceptMin: info.open_channel_auto_accept_min_ckb_funding_amount,
+        nodeName: (typeof raw.node_name === 'string' || raw.node_name === null ? raw.node_name : null),
+        nodeId,
+        addresses: Array.isArray(raw.addresses) ? raw.addresses : [],
+        openChannelAutoAcceptMin:
+          (typeof raw.open_channel_auto_accept_min_ckb_funding_amount === 'string'
+            ? raw.open_channel_auto_accept_min_ckb_funding_amount
+            : null),
       },
     })
   } catch (err) {

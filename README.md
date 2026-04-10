@@ -75,14 +75,11 @@ See [docs/cli.md](docs/cli.md) for full CLI documentation.
 Copy `.env.local.example` to `.env.local` and configure:
 
 ```bash
-# Required: Your Fiber node pubkey for receiving payments
-NEXT_PUBLIC_RECIPIENT_PUBKEY=03abc...your_pubkey_hex
+# Optional: Backend URL (frontend fetches recipient pubkey from backend /node-info)
+NEXT_PUBLIC_BACKEND_BASE_URL=http://localhost:8787
 
 # Optional: Bootnode multiaddr for listener auto-bootstrap
 NEXT_PUBLIC_BOOTNODE_MULTIADDR=/ip4/127.0.0.1/tcp/8228/p2p/Qm...
-
-# Optional: Backend URL
-NEXT_PUBLIC_BACKEND_BASE_URL=http://localhost:8787
 
 # Optional: Payment interval (default: 10 seconds)
 NEXT_PUBLIC_PAYMENT_INTERVAL_MS=10000
