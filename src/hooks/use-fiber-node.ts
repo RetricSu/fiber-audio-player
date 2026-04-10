@@ -101,6 +101,14 @@ function extractPeerIdFromMultiaddr(multiaddr: string): string | null {
   return match?.[1] || null;
 }
 
+function normalizeStateName(stateName?: string | null): string {
+  return (stateName ?? '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+}
+
+function isChannelState(stateName: string | undefined, expected: ChannelState): boolean {
+  return normalizeStateName(stateName) === normalizeStateName(expected);
+}
+
 interface GetCellsCapacityResult {
   capacity: `0x${string}`;
 }
@@ -142,7 +150,7 @@ function createBrowserRuntimeClient(node: FiberBrowserNode): FiberRuntimeClient 
         pubkey: formatRpcPubkey(peerPubkey) as unknown as `0x${string}`,
       });
       const readyChannel = result.channels.find(
-        (ch) => ch.state.state_name === ChannelState.ChannelReady && BigInt(ch.local_balance) > 0n
+        (ch) => isChannelState(ch.state.state_name, ChannelState.ChannelReady) && BigInt(ch.local_balance) > 0n
       );
       return readyChannel || null;
     },
@@ -542,7 +550,7 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
           // Route exists via network, check our total channel balance
           const allChannels = await client.listChannels();
           const totalBalance = allChannels.channels
-            .filter((ch) => ch.state.state_name === ChannelState.ChannelReady)
+            .filter((ch) => isChannelState(ch.state.state_name, ChannelState.ChannelReady))
             .reduce((sum, ch) => sum + BigInt(ch.local_balance), 0n);
           setAvailableBalance(formatShannon(totalBalance));
           setChannelStatus('ready');
@@ -651,9 +659,9 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
           );
 
           const activeChannel =
-            newPeerChannels.find((channel) => channel.state.state_name !== ChannelState.ChannelReady) ||
+            newPeerChannels.find((channel) => !isChannelState(channel.state.state_name, ChannelState.ChannelReady)) ||
             newPeerChannels[newPeerChannels.length - 1] ||
-            peerChannels.find((channel) => channel.state.state_name !== ChannelState.ChannelReady) ||
+            peerChannels.find((channel) => !isChannelState(channel.state.state_name, ChannelState.ChannelReady)) ||
             peerChannels[peerChannels.length - 1];
 
           if (activeChannel?.state?.state_name) {
@@ -664,8 +672,8 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
           // always map cleanly to the pre-open snapshot. If any channel to the
           // target peer is ready, the setup flow can proceed.
           const readyChannel =
-            newPeerChannels.find((ch) => ch.state.state_name === ChannelState.ChannelReady) ||
-            peerChannels.find((ch) => ch.state.state_name === ChannelState.ChannelReady);
+            newPeerChannels.find((ch) => isChannelState(ch.state.state_name, ChannelState.ChannelReady)) ||
+            peerChannels.find((ch) => isChannelState(ch.state.state_name, ChannelState.ChannelReady));
 
           if (readyChannel) {
             clearChannelTimer();
@@ -682,7 +690,7 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
 
           // Check for failed/closed channel
           const failedChannel = newPeerChannels.find(
-            (ch) => ch.state.state_name === ChannelState.Closed
+            (ch) => isChannelState(ch.state.state_name, ChannelState.Closed)
           );
           if (failedChannel) {
             setChannelStateName(failedChannel.state.state_name);
