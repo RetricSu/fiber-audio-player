@@ -1,0 +1,25 @@
+<svg width="1200" height="1200" viewBox="0 0 1200 1200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="1200" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B0F14" />
+      <stop offset="1" stop-color="#111C2B" />
+    </linearGradient>
+    <linearGradient id="ring" x1="300" y1="300" x2="900" y2="900" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00FFA3" />
+      <stop offset="1" stop-color="#00D4FF" />
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="1200" fill="url(#bg)" />
+  <circle cx="600" cy="600" r="360" stroke="url(#ring)" stroke-width="24" opacity="0.9" />
+  <circle cx="600" cy="600" r="250" stroke="#1E293B" stroke-width="2" opacity="0.8" />
+
+  <g opacity="0.9">
+    <rect x="435" y="520" width="48" height="160" rx="10" fill="#E2E8F0" />
+    <rect x="521" y="460" width="48" height="220" rx="10" fill="#E2E8F0" />
+    <rect x="607" y="500" width="48" height="180" rx="10" fill="#E2E8F0" />
+    <rect x="693" y="560" width="48" height="120" rx="10" fill="#E2E8F0" />
+  </g>
+
+  <text x="600" y="780" text-anchor="middle" fill="#94A3B8" font-size="44" font-family="monospace" letter-spacing="2">FIBER AUDIO</text>
+</svg>

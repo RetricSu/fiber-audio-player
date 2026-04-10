@@ -1,13 +1,8 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --font-display: 'Cormorant Garamond', serif;
-  --font-mono: 'JetBrains Mono', monospace;
-
   --color-fiber-dark: #0a0a0f;
   --color-fiber-deeper: #050508;
   --color-fiber-surface: #12121a;
@@ -29,7 +24,7 @@ html,
 body {
   max-width: 100vw;
   overflow-x: hidden;
-  font-family: var(--font-mono);
+  font-family: var(--font-mono), monospace;
 }
 
 body {
@@ -65,11 +60,11 @@ body {
 
 /* Font classes */
 .font-display {
-  font-family: var(--font-display);
+  font-family: var(--font-display), serif;
 }
 
 .font-mono {
-  font-family: var(--font-mono);
+  font-family: var(--font-mono), monospace;
 }
 
 /* Gradient text */

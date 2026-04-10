@@ -4,7 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { NodeStatus } from './NodeStatus';
 import { NodeInfo } from '@/lib/fiber-rpc';
-import { ChannelStatus } from '@/hooks/use-fiber-node';
+import { ChannelStatus, type NodeConnectionMode } from '@/hooks/use-fiber-node';
+import type { BrowserNodeState } from '@fiber-pay/sdk/browser';
 
 interface HeaderProps {
   // Node status props
@@ -36,6 +37,13 @@ interface HeaderProps {
   // RPC URL config
   rpcUrlValue?: string;
   onRpcUrlChange?: (url: string) => void;
+  nodeMode?: NodeConnectionMode;
+  onNodeModeChange?: (mode: NodeConnectionMode) => void;
+  passkeyDisplayName?: string;
+  onPasskeyDisplayNameChange?: (value: string) => void;
+  passkeySupported?: boolean | null;
+  passkeyConfigured?: boolean;
+  browserNodeState?: BrowserNodeState;
   onRequestEditUrl?: () => void;
   isDropdownOpen?: boolean;
   onDropdownOpenChange?: (open: boolean) => void;
@@ -70,6 +78,13 @@ export function Header({
   recipientMultiaddrConfigured = false,
   rpcUrlValue,
   onRpcUrlChange,
+  nodeMode = 'local-rpc',
+  onNodeModeChange,
+  passkeyDisplayName = 'Fiber Audio Listener',
+  onPasskeyDisplayNameChange,
+  passkeySupported = null,
+  passkeyConfigured = false,
+  browserNodeState = 'idle',
   backendError,
   onRequestEditUrl,
   isDropdownOpen: controlledIsDropdownOpen,
@@ -104,15 +119,25 @@ export function Header({
   }, [setIsDropdownOpen]);
 
   useEffect(() => {
-    if (isDropdownOpen && inputRef.current) {
+    if (isDropdownOpen && nodeMode === 'local-rpc' && inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select();
     }
-  }, [isDropdownOpen]);
+  }, [isDropdownOpen, nodeMode]);
 
   const getButtonStatus = () => {
-    if (isConnecting) return { text: 'Connecting...', color: 'bg-fiber-warning' };
-    if (!isConnected) return { text: 'Connect Node', color: 'bg-fiber-muted' };
+    if (isConnecting) {
+      return {
+        text: nodeMode === 'browser-passkey' ? 'Starting Browser Node...' : 'Connecting...',
+        color: 'bg-fiber-warning',
+      };
+    }
+    if (!isConnected) {
+      return {
+        text: nodeMode === 'browser-passkey' ? 'Start Browser Node' : 'Connect Node',
+        color: 'bg-fiber-muted',
+      };
+    }
     if (channelStatus === 'ready') return { text: 'Node Ready', color: 'bg-fiber-accent' };
     return { text: 'Node Connected', color: 'bg-fiber-accent' };
   };
@@ -256,23 +281,82 @@ export function Header({
                       onRequestEditUrl={onRequestEditUrl}
                       topConfigPanel={
                         !isConnected ? (
-                          <div>
-                            <label className="block text-xs text-fiber-muted/95 mb-2 font-mono uppercase tracking-wider">
-                              Connect To Your Fiber Node Via RPC URL
-                            </label>
-                            <div className="relative group">
-                              <input
-                                ref={inputRef}
-                                type="text"
-                                value={rpcUrlValue || rpcUrl}
-                                onChange={(e) => onRpcUrlChange?.(e.target.value)}
-                                className="w-full px-3 py-2 pr-10 bg-fiber-dark border border-fiber-border rounded-lg text-sm font-mono text-white focus:outline-none focus:border-fiber-accent focus:ring-1 focus:ring-fiber-accent/30 hover:bg-fiber-surface/50 transition-all duration-200"
-                                placeholder={rpcUrl}
-                              />
-                              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-fiber-muted group-hover:text-fiber-accent transition-colors pointer-events-none">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-xs text-fiber-muted/95 mb-2 font-mono uppercase tracking-wider">
+                                Node Mode
+                              </label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => onNodeModeChange?.('local-rpc')}
+                                  className={`px-2.5 py-2 text-[11px] font-mono uppercase tracking-wider rounded-lg border transition-all ${
+                                    nodeMode === 'local-rpc'
+                                      ? 'bg-fiber-accent/20 text-fiber-accent border-fiber-accent/60'
+                                      : 'bg-fiber-dark/70 text-fiber-muted/95 border-fiber-border hover:text-white/95'
+                                  }`}
+                                >
+                                  Local RPC Node
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => onNodeModeChange?.('browser-passkey')}
+                                  className={`px-2.5 py-2 text-[11px] font-mono uppercase tracking-wider rounded-lg border transition-all ${
+                                    nodeMode === 'browser-passkey'
+                                      ? 'bg-fiber-accent/20 text-fiber-accent border-fiber-accent/60'
+                                      : 'bg-fiber-dark/70 text-fiber-muted/95 border-fiber-border hover:text-white/95'
+                                  }`}
+                                >
+                                  Browser Passkey
+                                </button>
                               </div>
                             </div>
+
+                            {nodeMode === 'local-rpc' ? (
+                              <div>
+                                <label className="block text-xs text-fiber-muted/95 mb-2 font-mono uppercase tracking-wider">
+                                  Connect To Fiber Node Via RPC URL
+                                </label>
+                                <div className="relative group">
+                                  <input
+                                    ref={inputRef}
+                                    type="text"
+                                    value={rpcUrlValue || rpcUrl}
+                                    onChange={(e) => onRpcUrlChange?.(e.target.value)}
+                                    className="w-full px-3 py-2 pr-10 bg-fiber-dark border border-fiber-border rounded-lg text-sm font-mono text-white focus:outline-none focus:border-fiber-accent focus:ring-1 focus:ring-fiber-accent/30 hover:bg-fiber-surface/50 transition-all duration-200"
+                                    placeholder={rpcUrl}
+                                  />
+                                  <div className="absolute right-3 top-1/2 -translate-y-1/2 text-fiber-muted group-hover:text-fiber-accent transition-colors pointer-events-none">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                <label className="block text-xs text-fiber-muted/95 font-mono uppercase tracking-wider">
+                                  Browser Node Identity
+                                </label>
+                                <input
+                                  type="text"
+                                  value={passkeyDisplayName}
+                                  onChange={(e) => onPasskeyDisplayNameChange?.(e.target.value)}
+                                  className="w-full px-3 py-2 bg-fiber-dark border border-fiber-border rounded-lg text-sm font-mono text-white focus:outline-none focus:border-fiber-accent focus:ring-1 focus:ring-fiber-accent/30 hover:bg-fiber-surface/50 transition-all duration-200"
+                                  placeholder="Fiber Audio Listener"
+                                />
+                                <p className="text-[11px] text-fiber-muted/90">
+                                  Requires secure context (HTTPS or localhost) and passkey PRF support.
+                                </p>
+                                <p className={`text-[11px] font-mono ${passkeySupported === false ? 'text-red-400' : 'text-fiber-accent'}`}>
+                                  Passkey Support: {passkeySupported === null ? 'Checking...' : passkeySupported ? 'Available' : 'Unavailable'}
+                                </p>
+                                <p className="text-[11px] font-mono text-fiber-muted/95">
+                                  Passkey State: {passkeyConfigured ? 'Configured' : 'Not registered yet'}
+                                </p>
+                                <p className="text-[11px] font-mono text-fiber-muted/95">
+                                  Browser Node State: {browserNodeState}
+                                </p>
+                              </div>
+                            )}
                           </div>
                         ) : null
                       }

@@ -9,8 +9,11 @@ importers:
   .:
     dependencies:
       '@fiber-pay/sdk':
-        specifier: 0.2.0
-        version: 0.2.0
+        specifier: 0.2.1
+        version: 0.2.1(@nervosnetwork/fiber-js@0.8.0)
+      '@nervosnetwork/fiber-js':
+        specifier: ~0.8.0
+        version: 0.8.0
       hls.js:
         specifier: ^1.6.13
         version: 1.6.15
@@ -110,8 +113,8 @@ importers:
   backend:
     dependencies:
       '@fiber-pay/sdk':
-        specifier: 0.2.0
-        version: 0.2.0
+        specifier: 0.2.1
+        version: 0.2.1(@nervosnetwork/fiber-js@0.8.0)
       '@hono/node-server':
         specifier: ^1.19.4
         version: 1.19.10(hono@4.12.4)
@@ -366,8 +369,8 @@ packages:
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@fiber-pay/sdk@0.2.0':
-    resolution: {integrity: sha512-HwI7CpeX5vFZ4SwIfK+V2jc8KYm5GH0AaLlhOLTG7/ZJzbbyvjRJYNAMO4YHtzZ/UEmBQRfs+DHv7QZinIfUgg==}
+  '@fiber-pay/sdk@0.2.1':
+    resolution: {integrity: sha512-6W7Wa5mqnlEr//xXv7rLXe/EOHPRPyL+yAEft4cY0jiLNWZvyMUhlKh0LAPaX9v7N7v+KqdVI2hLHwFepxKuWQ==}
     engines: {node: '>=20'}
     peerDependencies:
       '@nervosnetwork/fiber-js': ~0.8.0
@@ -581,6 +584,9 @@ packages:
 
   '@napi-rs/wasm-runtime@0.2.12':
     resolution: {integrity: sha512-ZVWUcfwY4E/yPitQJl481FjFo3K22D6qF0DuFH6Y/nbnE11GY5uguDxZMGXPQ8WQ0128MXQD7TnfHyK4oWoIJQ==}
+
+  '@nervosnetwork/fiber-js@0.8.0':
+    resolution: {integrity: sha512-R7gTpsQD1IYOpG4CehHYHdTsvHnoxQ4i7rF9cWLxvKO2PzDeZFfgavcwh7320AZhynR7eg7fm+g+xAmquvWS6w==}
 
   '@next/env@15.5.12':
     resolution: {integrity: sha512-pUvdJN1on574wQHjaBfNGDt9Mz5utDSZFsIIQkMzPgNS8ZvT4H2mwOrOIClwsQOb6EGx5M76/CZr6G8i6pSpLg==}
@@ -1161,6 +1167,9 @@ packages:
   async-function@1.0.0:
     resolution: {integrity: sha512-hsU18Ae8CDTR6Kgu9DYf0EbCr/a5iGL0rytQDobUcdpYOKokk8LEjVphnXkDkgpi0wYVsqrXuP0bZxJaTqdgoA==}
     engines: {node: '>= 0.4'}
+
+  async-mutex@0.5.0:
+    resolution: {integrity: sha512-1A94B18jkJ3DYq284ohPxoXbfTA5HsQ7/Mf4DEhcyLx3Bz27Rh59iScbB6EPiP+B+joue6YCxcMXSbFC1tZKwA==}
 
   asynckit@0.4.0:
     resolution: {integrity: sha512-Oei9OH4tRh0YqU3GxhX79dM/mwVgvbZJaSNaRk+bshkj0S5cfHcgYakreBjrHwatXKbz+IoIdYLxrKim2MjW0Q==}
@@ -2598,6 +2607,9 @@ packages:
     resolution: {integrity: sha512-eLoXW/DHyl62zxY4SCaIgnRhuMr6ri4juEYARS8E6sCEqzKpOiE521Ucofdx+KnDZl5xmvGYaaKCk5FEOxJCoQ==}
     engines: {node: '>= 0.4'}
 
+  stream-browserify@3.0.0:
+    resolution: {integrity: sha512-H73RAHsVBapbim0tU2JwwOiXUj+fikfiaoYAKHF3VJfA0pe2BCzkhAHBlLG6REzE+2WNZcxOXjK7lkso+9euLA==}
+
   string-width@4.2.3:
     resolution: {integrity: sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g==}
     engines: {node: '>=8'}
@@ -3080,11 +3092,13 @@ snapshots:
       '@eslint/core': 0.17.0
       levn: 0.4.1
 
-  '@fiber-pay/sdk@0.2.0':
+  '@fiber-pay/sdk@0.2.1(@nervosnetwork/fiber-js@0.8.0)':
     dependencies:
       '@noble/hashes': 2.0.1
       macaroon: 3.0.4
       zod: 4.3.6
+    optionalDependencies:
+      '@nervosnetwork/fiber-js': 0.8.0
 
   '@hono/node-server@1.19.10(hono@4.12.4)':
     dependencies:
@@ -3227,6 +3241,11 @@ snapshots:
       '@emnapi/runtime': 1.8.1
       '@tybys/wasm-util': 0.10.1
     optional: true
+
+  '@nervosnetwork/fiber-js@0.8.0':
+    dependencies:
+      async-mutex: 0.5.0
+      stream-browserify: 3.0.0
 
   '@next/env@15.5.12': {}
 
@@ -3738,6 +3757,10 @@ snapshots:
   ast-types-flow@0.0.8: {}
 
   async-function@1.0.0: {}
+
+  async-mutex@0.5.0:
+    dependencies:
+      tslib: 2.8.1
 
   asynckit@0.4.0: {}
 
@@ -5386,6 +5409,11 @@ snapshots:
     dependencies:
       es-errors: 1.3.0
       internal-slot: 1.1.0
+
+  stream-browserify@3.0.0:
+    dependencies:
+      inherits: 2.0.4
+      readable-stream: 3.6.2
 
   string-width@4.2.3:
     dependencies:
