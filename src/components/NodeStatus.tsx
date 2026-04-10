@@ -71,6 +71,7 @@ export function NodeStatus({
   const [fundingAddress, setFundingAddress] = useState<string | null>(null);
   const [fundingAddressError, setFundingAddressError] = useState<string | null>(null);
   const [fundingQrDataUrl, setFundingQrDataUrl] = useState<string | null>(null);
+  const [fundingQrError, setFundingQrError] = useState<string | null>(null);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const wasConnectingRef = useRef(false);
   const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -113,12 +114,14 @@ export function NodeStatus({
     const buildQrCode = async () => {
       if (!fundingAddress) {
         setFundingQrDataUrl(null);
+        setFundingQrError(null);
         return;
       }
 
       try {
+        setFundingQrError(null);
         const dataUrl = await QRCode.toDataURL(fundingAddress, {
-          width: 192,
+          width: 160,
           margin: 1,
           errorCorrectionLevel: 'M',
           color: {
@@ -133,6 +136,7 @@ export function NodeStatus({
       } catch {
         if (!canceled) {
           setFundingQrDataUrl(null);
+          setFundingQrError('Failed to generate funding QR code. You can still copy the address manually.');
         }
       }
     };
@@ -383,6 +387,10 @@ export function NodeStatus({
                           className="w-40 h-40 rounded bg-white/5"
                         />
                       </div>
+                    )}
+
+                    {fundingQrError && (
+                      <p className="text-xs text-red-300/90 font-mono">{fundingQrError}</p>
                     )}
                   </>
                 ) : (
