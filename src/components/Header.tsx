@@ -263,7 +263,7 @@ export function Header({
                   transition={{ duration: 0.2 }}
                   className="absolute right-0 top-full mt-2 w-[400px] max-w-[90vw] z-50"
                 >
-                  <div className="rounded-2xl bg-fiber-surface/95 backdrop-blur-md border border-fiber-border/90 shadow-2xl shadow-black/50 overflow-hidden">
+                  <div className="rounded-2xl bg-fiber-surface/95 backdrop-blur-md border border-fiber-border/90 shadow-2xl shadow-black/50 overflow-x-hidden overflow-y-auto max-h-[80vh]">
                     <NodeStatus
                       isConnected={isConnected}
                       isConnecting={isConnecting}
