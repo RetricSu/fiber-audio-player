@@ -289,17 +289,6 @@ export function Header({
                               <div className="grid grid-cols-2 gap-2">
                                 <button
                                   type="button"
-                                  onClick={() => onNodeModeChange?.('local-rpc')}
-                                  className={`px-2.5 py-2 text-[11px] font-mono uppercase tracking-wider rounded-lg border transition-all ${
-                                    nodeMode === 'local-rpc'
-                                      ? 'bg-fiber-accent/20 text-fiber-accent border-fiber-accent/60'
-                                      : 'bg-fiber-dark/70 text-fiber-muted/95 border-fiber-border hover:text-white/95'
-                                  }`}
-                                >
-                                  Local RPC Node
-                                </button>
-                                <button
-                                  type="button"
                                   onClick={() => onNodeModeChange?.('browser-passkey')}
                                   className={`px-2.5 py-2 text-[11px] font-mono uppercase tracking-wider rounded-lg border transition-all ${
                                     nodeMode === 'browser-passkey'
@@ -308,6 +297,17 @@ export function Header({
                                   }`}
                                 >
                                   Browser Passkey
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => onNodeModeChange?.('local-rpc')}
+                                  className={`px-2.5 py-2 text-[11px] font-mono uppercase tracking-wider rounded-lg border transition-all ${
+                                    nodeMode === 'local-rpc'
+                                      ? 'bg-fiber-accent/20 text-fiber-accent border-fiber-accent/60'
+                                      : 'bg-fiber-dark/70 text-fiber-muted/95 border-fiber-border hover:text-white/95'
+                                  }`}
+                                >
+                                  Local RPC Node
                                 </button>
                               </div>
                             </div>

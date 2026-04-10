@@ -130,7 +130,7 @@ export function NodeStatus({
 
       <div className="relative z-10">
           {/* Header */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center mb-4">
             <div className="flex items-center gap-3">
               <div className="relative">
                 <motion.div
@@ -160,20 +160,6 @@ export function NodeStatus({
               <h3 className="text-sm font-mono uppercase tracking-wider text-fiber-muted/95">
                 Fiber Node
               </h3>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleConnectToggle}
-                disabled={isConnecting}
-                className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider rounded-lg transition-all border ${
-                  isConnected
-                    ? 'bg-fiber-border/90 text-white/90 border-fiber-border hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/50'
-                    : 'bg-fiber-accent/20 text-fiber-accent hover:bg-fiber-accent/30 border border-fiber-accent/50'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
-              >
-                {isConnecting ? 'Connecting...' : isConnected ? 'Disconnect' : 'Connect'}
-              </button>
             </div>
           </div>
 
@@ -272,27 +258,6 @@ export function NodeStatus({
             </div>
 
             </motion.div>
-          ) : !isConnecting && !error ? (
-            <div className="text-center py-4">
-              <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-fiber-border/50 flex items-center justify-center">
-                <svg
-                  className="w-6 h-6 text-fiber-muted"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
-                  />
-                </svg>
-              </div>
-              <p className="text-sm text-fiber-muted">
-                Connect to your local Fiber node to enable streaming payments
-              </p>
-            </div>
           ) : null}
 
         {/* Recipient pubkey (read-only, set by deployer) */}
@@ -424,6 +389,21 @@ export function NodeStatus({
             </div>
           </div>
         )}
+
+        {/* Connect / Disconnect action */}
+        <div className="mt-4 pt-4 border-t border-fiber-border/50">
+          <button
+            onClick={handleConnectToggle}
+            disabled={isConnecting}
+            className={`w-full px-3 py-2.5 text-xs font-mono uppercase tracking-wider rounded-lg transition-all border ${
+              isConnected
+                ? 'bg-fiber-border/90 text-white/90 border-fiber-border hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/50'
+                : 'bg-fiber-accent/20 text-fiber-accent hover:bg-fiber-accent/30 border-fiber-accent/50'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+          >
+            {isConnecting ? 'Connecting...' : isConnected ? 'Disconnect' : 'Connect'}
+          </button>
+        </div>
       </div>
 
       {/* Connection Error Modal */}
