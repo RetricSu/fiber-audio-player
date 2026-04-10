@@ -127,6 +127,8 @@ export function ConnectionErrorModal({ isOpen, onClose, error, rpcUrl, onRequest
   const { Icon } = config;
 
   const bootnodeMultiaddr = process.env.NEXT_PUBLIC_BOOTNODE_MULTIADDR || '';
+  const browserBootnodeMultiaddr = process.env.NEXT_PUBLIC_BOOTNODE_MULTIADDR_BROWSER || '';
+  const hasBootnodeConfigured = Boolean(bootnodeMultiaddr.trim() || browserBootnodeMultiaddr.trim());
 
   if (!mounted) return null;
 
@@ -189,9 +191,9 @@ export function ConnectionErrorModal({ isOpen, onClose, error, rpcUrl, onRequest
                     <p className='mt-2 text-xs font-mono text-white/90 bg-black/30 p-2 rounded'>
                       Make sure your Fiber node is running with CORS enabled at: <code className="text-fiber-accent">{rpcUrl}</code>
                     </p>
-                    {!bootnodeMultiaddr.trim() && (
+                    {!hasBootnodeConfigured && (
                       <p className="mt-2 text-xs font-mono text-fiber-warning bg-fiber-warning/10 border border-fiber-warning/30 p-2 rounded">
-                        Optional: set NEXT_PUBLIC_BOOTNODE_MULTIADDR to enable automatic peer bootstrap for users without preconfigured peers.
+                        Optional: set NEXT_PUBLIC_BOOTNODE_MULTIADDR (local RPC mode) and/or NEXT_PUBLIC_BOOTNODE_MULTIADDR_BROWSER (browser passkey mode) to enable automatic peer bootstrap.
                       </p>
                     )}
                   </div>

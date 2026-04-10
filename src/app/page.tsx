@@ -19,6 +19,7 @@ const FUNDING_NETWORK: 'testnet' | 'mainnet' = 'testnet';
 
 // Bootnode multiaddr — for the user's node to join the Fiber network.
 const BOOTNODE_MULTIADDR = process.env.NEXT_PUBLIC_BOOTNODE_MULTIADDR || '';
+const BOOTNODE_MULTIADDR_BROWSER = process.env.NEXT_PUBLIC_BOOTNODE_MULTIADDR_BROWSER || '';
 
 // Default cover image for episodes
 const DEFAULT_COVER_URL = '/default-cover.svg';
@@ -87,9 +88,17 @@ export default function Home() {
       });
   }, []);
 
+  const resolvedBrowserBootnodeMultiaddr =
+    BOOTNODE_MULTIADDR_BROWSER.trim() || BOOTNODE_MULTIADDR.trim();
+  const recipientMultiaddrConfigured =
+    nodeMode === 'browser-passkey'
+      ? Boolean(resolvedBrowserBootnodeMultiaddr)
+      : Boolean(BOOTNODE_MULTIADDR.trim());
+
   const fiberNode = useFiberNode(rpcUrl, {
     recipientPubkey,
     bootnodeMultiaddr: BOOTNODE_MULTIADDR,
+    browserBootnodeMultiaddr: resolvedBrowserBootnodeMultiaddr,
     mode: nodeMode,
     passkeyDisplayName,
     browserNetwork: FUNDING_NETWORK,
@@ -155,7 +164,7 @@ export default function Home() {
         faucetUrl={FAUCET_URL}
         fundingNetwork={FUNDING_NETWORK}
         recipientPubkey={recipientPubkey}
-        recipientMultiaddrConfigured={Boolean(BOOTNODE_MULTIADDR.trim())}
+        recipientMultiaddrConfigured={recipientMultiaddrConfigured}
         onCheckRoute={() => fiberNode.checkPaymentRoute(recipientPubkey)}
         onOpenChannel={() => fiberNode.setupChannel()}
         onCancelSetup={fiberNode.cancelChannelSetup}

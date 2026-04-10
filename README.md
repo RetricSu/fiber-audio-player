@@ -81,6 +81,10 @@ NEXT_PUBLIC_BACKEND_BASE_URL=http://localhost:8787
 # Optional: Bootnode multiaddr for listener auto-bootstrap
 NEXT_PUBLIC_BOOTNODE_MULTIADDR=/ip4/127.0.0.1/tcp/8228/p2p/Qm...
 
+# Optional: Browser-passkey (WASM) bootnode multiaddr (must be websocket-compatible)
+# If unset, browser mode falls back to NEXT_PUBLIC_BOOTNODE_MULTIADDR
+NEXT_PUBLIC_BOOTNODE_MULTIADDR_BROWSER=/dns4/bottle.fiber.channel/tcp/443/wss/p2p/Qm...
+
 # Optional: Payment interval (default: 10 seconds)
 NEXT_PUBLIC_PAYMENT_INTERVAL_MS=10000
 ```
