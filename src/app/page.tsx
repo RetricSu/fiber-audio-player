@@ -15,6 +15,7 @@ import { getBackendNodeInfo } from '@/lib/stream-auth';
 // Default configuration
 const DEFAULT_RPC_URL = 'http://127.0.0.1:8229';
 const FAUCET_URL = 'https://testnet.ckbapp.dev/';
+const FUNDING_NETWORK: 'testnet' | 'mainnet' = 'testnet';
 
 // Bootnode multiaddr — for the user's node to join the Fiber network.
 const BOOTNODE_MULTIADDR = process.env.NEXT_PUBLIC_BOOTNODE_MULTIADDR || '';
@@ -91,7 +92,7 @@ export default function Home() {
     bootnodeMultiaddr: BOOTNODE_MULTIADDR,
     mode: nodeMode,
     passkeyDisplayName,
-    browserNetwork: 'testnet',
+    browserNetwork: FUNDING_NETWORK,
   });
 
   const payment = useStreamingPayment({
@@ -152,6 +153,7 @@ export default function Home() {
         isFundingSufficient={fiberNode.isFundingSufficient}
         fundingBalanceError={fiberNode.fundingBalanceError}
         faucetUrl={FAUCET_URL}
+        fundingNetwork={FUNDING_NETWORK}
         recipientPubkey={recipientPubkey}
         recipientMultiaddrConfigured={Boolean(BOOTNODE_MULTIADDR.trim())}
         onCheckRoute={() => fiberNode.checkPaymentRoute(recipientPubkey)}

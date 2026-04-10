@@ -29,6 +29,7 @@ interface HeaderProps {
   isFundingSufficient?: boolean;
   fundingBalanceError?: string | null;
   faucetUrl?: string;
+  fundingNetwork?: 'testnet' | 'mainnet';
   onCheckRoute?: () => void;
   onOpenChannel?: () => void;
   onCancelSetup?: () => void;
@@ -71,6 +72,7 @@ export function Header({
   isFundingSufficient = false,
   fundingBalanceError,
   faucetUrl,
+  fundingNetwork = 'testnet',
   onCheckRoute,
   onOpenChannel,
   onCancelSetup,
@@ -282,6 +284,7 @@ export function Header({
                       isFundingSufficient={isFundingSufficient}
                       fundingBalanceError={fundingBalanceError}
                       faucetUrl={faucetUrl}
+                      fundingNetwork={fundingNetwork}
                       recipientPubkey={recipientPubkey}
                       recipientMultiaddrConfigured={recipientMultiaddrConfigured}
                       onCheckRoute={onCheckRoute}

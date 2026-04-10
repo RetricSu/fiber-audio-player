@@ -8,6 +8,7 @@ import {
   ckbToShannons,
   shannonsToCkb,
   ChannelState,
+  scriptToAddress as sdkScriptToAddress,
 } from '@fiber-pay/sdk';
 
 // Re-export ChannelState from SDK
@@ -16,6 +17,7 @@ export { ChannelState };
 // Re-export utility functions with backward-compatible names
 export const toHex = sdkToHex;
 export const fromHex = sdkFromHex;
+export const scriptToAddress = sdkScriptToAddress;
 
 // Shannon conversion (1 CKB = 10^8 shannon)
 export const SHANNON_PER_CKB = 100_000_000n;
