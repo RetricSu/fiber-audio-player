@@ -142,6 +142,15 @@ export function Header({
     return { text: 'Node Connected', color: 'bg-fiber-accent' };
   };
 
+  const getModeButtonClasses = (isActive: boolean) => {
+    const baseClasses =
+      'px-2.5 py-2 text-[11px] font-mono uppercase tracking-wider rounded-lg border transition-all';
+    if (isActive) {
+      return `${baseClasses} bg-fiber-accent/20 text-fiber-accent border-fiber-accent/60`;
+    }
+    return `${baseClasses} bg-fiber-dark/70 text-fiber-muted/95 border-fiber-border hover:text-white/95`;
+  };
+
   const buttonStatus = getButtonStatus();
 
   return (
@@ -290,22 +299,14 @@ export function Header({
                                 <button
                                   type="button"
                                   onClick={() => onNodeModeChange?.('browser-passkey')}
-                                  className={`px-2.5 py-2 text-[11px] font-mono uppercase tracking-wider rounded-lg border transition-all ${
-                                    nodeMode === 'browser-passkey'
-                                      ? 'bg-fiber-accent/20 text-fiber-accent border-fiber-accent/60'
-                                      : 'bg-fiber-dark/70 text-fiber-muted/95 border-fiber-border hover:text-white/95'
-                                  }`}
+                                  className={getModeButtonClasses(nodeMode === 'browser-passkey')}
                                 >
                                   Browser Passkey
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => onNodeModeChange?.('local-rpc')}
-                                  className={`px-2.5 py-2 text-[11px] font-mono uppercase tracking-wider rounded-lg border transition-all ${
-                                    nodeMode === 'local-rpc'
-                                      ? 'bg-fiber-accent/20 text-fiber-accent border-fiber-accent/60'
-                                      : 'bg-fiber-dark/70 text-fiber-muted/95 border-fiber-border hover:text-white/95'
-                                  }`}
+                                  className={getModeButtonClasses(nodeMode === 'local-rpc')}
                                 >
                                   Local RPC Node
                                 </button>

@@ -7,6 +7,7 @@ import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { blake2b } from '@noble/hashes/blake2.js'
+import { z } from 'zod'
 import {
   FiberRpcClient,
   randomBytes32,
@@ -79,6 +80,17 @@ function resolveInvoiceHashAlgorithm(value: string | undefined): InvoiceHashAlgo
 const INVOICE_HASH_ALGORITHM = resolveInvoiceHashAlgorithm(process.env.INVOICE_HASH_ALGORITHM)
 
 const fiberClient = new FiberRpcClient({ url: FIBER_RPC_URL, timeout: 15_000 })
+
+const nodeInfoResponseSchema = z
+  .object({
+    pubkey: z.string().optional(),
+    node_id: z.string().optional(),
+    nodeId: z.string().optional(),
+    node_name: z.string().nullable().optional(),
+    addresses: z.array(z.string()).optional(),
+    open_channel_auto_accept_min_ckb_funding_amount: z.string().optional(),
+  })
+  .passthrough()
 
 // ---------------------------------------------------------------------------
 // Types
@@ -338,11 +350,23 @@ app.get('/healthz', (c) => c.json({ ok: true, service: 'fiber-audio-backend' }))
 app.get('/node-info', async (c) => {
   try {
     const info = await fiberClient.nodeInfo()
-    const raw = info as unknown as Record<string, unknown>
+    const parsed = nodeInfoResponseSchema.safeParse(info)
+    if (!parsed.success) {
+      return c.json(
+        {
+          ok: false,
+          error:
+            'Fiber node info response is invalid. Check FNN version and SDK compatibility.',
+        },
+        502,
+      )
+    }
+
+    const raw = parsed.data
     const nodeId =
-      (typeof raw.pubkey === 'string' ? raw.pubkey : null) ??
-      (typeof raw.node_id === 'string' ? raw.node_id : null) ??
-      (typeof raw.nodeId === 'string' ? raw.nodeId : null)
+      raw.pubkey ??
+      raw.node_id ??
+      raw.nodeId
 
     if (!nodeId) {
       return c.json(
@@ -358,13 +382,10 @@ app.get('/node-info', async (c) => {
     return c.json({
       ok: true,
       node: {
-        nodeName: (typeof raw.node_name === 'string' || raw.node_name === null ? raw.node_name : null),
+        nodeName: raw.node_name ?? null,
         nodeId,
-        addresses: Array.isArray(raw.addresses) ? raw.addresses : [],
-        openChannelAutoAcceptMin:
-          (typeof raw.open_channel_auto_accept_min_ckb_funding_amount === 'string'
-            ? raw.open_channel_auto_accept_min_ckb_funding_amount
-            : null),
+        addresses: raw.addresses ?? [],
+        openChannelAutoAcceptMin: raw.open_channel_auto_accept_min_ckb_funding_amount ?? null,
       },
     })
   } catch (err) {
