@@ -14,7 +14,7 @@ import { getBackendNodeInfo } from '@/lib/stream-auth';
 
 // Default configuration
 const DEFAULT_RPC_URL = 'http://127.0.0.1:8229';
-const FAUCET_URL = 'https://testnet.ckbapp.dev/';
+const FAUCET_URL = 'https://faucet.nervos.org/';
 const FUNDING_NETWORK: 'testnet' | 'mainnet' = 'testnet';
 
 // Bootnode multiaddr — for the user's node to join the Fiber network.
