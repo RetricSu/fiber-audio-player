@@ -705,6 +705,10 @@ app.get('/stream/hls/:fileName', async (c) => {
     return c.text('Unsupported media file', 400)
   }
 
+  // Allow HLS resources to be embedded by COEP-enabled frontends across origins.
+  c.header('Access-Control-Allow-Origin', '*')
+  c.header('Cross-Origin-Resource-Policy', 'cross-origin')
+
   // Get episode to construct HLS path from storage_path
   const episode = getDb().prepare(`
     SELECT storage_path

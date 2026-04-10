@@ -39,6 +39,8 @@ export function useAudioPlayer(src: string): UseAudioPlayerResult {
 
   useEffect(() => {
     const audio = new Audio();
+    // Force media fetches to use CORS so COEP pages can load cross-origin HLS.
+    audio.crossOrigin = 'anonymous';
     audio.preload = 'auto';
     audioRef.current = audio;
 
