@@ -109,6 +109,7 @@ type ClaimSuccessPayload = {
 type StreamSession = {
   id: string
   episodeId: string
+  clientKey: string | null
   streamToken: string
   totalPaidSeconds: number
   maxSegmentIndex: number
@@ -129,11 +130,12 @@ const claimInFlight = new Map<string, Promise<ClaimSuccessPayload>>()
 // Database helper functions for stream_sessions
 function insertStreamSession(session: StreamSession): void {
   getDb().prepare(`
-    INSERT INTO stream_sessions (id, episode_id, stream_token, total_paid_seconds, max_segment_index, expires_at, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO stream_sessions (id, episode_id, client_key, stream_token, total_paid_seconds, max_segment_index, expires_at, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     session.id,
     session.episodeId,
+    session.clientKey,
     session.streamToken,
     session.totalPaidSeconds,
     session.maxSegmentIndex,
@@ -146,6 +148,7 @@ function getStreamSessionById(sessionId: string): StreamSession | undefined {
   const row = getDb().prepare('SELECT * FROM stream_sessions WHERE id = ?').get(sessionId) as {
     id: string
     episode_id: string
+    client_key: string | null
     stream_token: string
     total_paid_seconds: number
     max_segment_index: number
@@ -158,6 +161,7 @@ function getStreamSessionById(sessionId: string): StreamSession | undefined {
   return {
     id: row.id,
     episodeId: row.episode_id,
+    clientKey: row.client_key,
     streamToken: row.stream_token,
     totalPaidSeconds: row.total_paid_seconds,
     maxSegmentIndex: row.max_segment_index,
@@ -170,6 +174,7 @@ function getStreamSessionByToken(streamToken: string): StreamSession | undefined
   const row = getDb().prepare('SELECT * FROM stream_sessions WHERE stream_token = ?').get(streamToken) as {
     id: string
     episode_id: string
+    client_key: string | null
     stream_token: string
     total_paid_seconds: number
     max_segment_index: number
@@ -182,6 +187,49 @@ function getStreamSessionByToken(streamToken: string): StreamSession | undefined
   return {
     id: row.id,
     episodeId: row.episode_id,
+    clientKey: row.client_key,
+    streamToken: row.stream_token,
+    totalPaidSeconds: row.total_paid_seconds,
+    maxSegmentIndex: row.max_segment_index,
+    expiresAt: row.expires_at,
+    createdAt: row.created_at,
+  }
+}
+
+function getRecentSessionByEpisodeAndClientKey(
+  episodeId: string,
+  clientKey: string,
+  timeWindowMs: number,
+): StreamSession | undefined {
+  const now = Date.now()
+  const earliestCreatedAt = now - timeWindowMs
+
+  const row = getDb().prepare(`
+    SELECT *
+    FROM stream_sessions
+    WHERE episode_id = ?
+      AND client_key = ?
+      AND created_at >= ?
+      AND expires_at > ?
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).get(episodeId, clientKey, earliestCreatedAt, now) as {
+    id: string
+    episode_id: string
+    client_key: string | null
+    stream_token: string
+    total_paid_seconds: number
+    max_segment_index: number
+    expires_at: number
+    created_at: number
+  } | undefined
+
+  if (!row) return undefined
+
+  return {
+    id: row.id,
+    episodeId: row.episode_id,
+    clientKey: row.client_key,
     streamToken: row.stream_token,
     totalPaidSeconds: row.total_paid_seconds,
     maxSegmentIndex: row.max_segment_index,
@@ -338,13 +386,33 @@ app.get('/healthz', (c) => c.json({ ok: true, service: 'fiber-audio-backend' }))
 app.get('/node-info', async (c) => {
   try {
     const info = await fiberClient.nodeInfo()
+    const raw = info as unknown as Record<string, unknown>
+    const nodeId =
+      (typeof raw.pubkey === 'string' ? raw.pubkey : null) ??
+      (typeof raw.node_id === 'string' ? raw.node_id : null) ??
+      (typeof raw.nodeId === 'string' ? raw.nodeId : null)
+
+    if (!nodeId) {
+      return c.json(
+        {
+          ok: false,
+          error:
+            'Fiber node info is missing identifier field (pubkey/node_id). Check FNN version and SDK compatibility.',
+        },
+        502,
+      )
+    }
+
     return c.json({
       ok: true,
       node: {
-        nodeName: info.node_name,
-        nodeId: info.node_id,
-        addresses: info.addresses,
-        openChannelAutoAcceptMin: info.open_channel_auto_accept_min_ckb_funding_amount,
+        nodeName: (typeof raw.node_name === 'string' || raw.node_name === null ? raw.node_name : null),
+        nodeId,
+        addresses: Array.isArray(raw.addresses) ? raw.addresses : [],
+        openChannelAutoAcceptMin:
+          (typeof raw.open_channel_auto_accept_min_ckb_funding_amount === 'string'
+            ? raw.open_channel_auto_accept_min_ckb_funding_amount
+            : null),
       },
     })
   } catch (err) {
@@ -364,7 +432,7 @@ app.post('/sessions/create', async (c) => {
     return c.json({ ok: false, error: validation.error }, 400)
   }
 
-  const { episodeId } = validation.data
+  const { episodeId, clientKey } = validation.data
 
   try {
     const episode = getDb().prepare(`
@@ -385,6 +453,22 @@ app.post('/sessions/create', async (c) => {
       return c.json({ ok: false, error: `Episode is not published (status: ${episode.status})` }, 400)
     }
 
+    if (clientKey) {
+      const reusedSession = getRecentSessionByEpisodeAndClientKey(episodeId, clientKey, 5 * 60 * 1000)
+      if (reusedSession) {
+        return c.json({
+          ok: true,
+          fromCache: true,
+          session: {
+            sessionId: reusedSession.id,
+            episodeId,
+            pricePerSecondShannon: episode.price_per_second.toString(),
+            segmentDurationSec,
+          },
+        })
+      }
+    }
+
     const sessionId = randomUUID()
     const streamToken = randomUUID()
     const expiresAt = Date.now() + authTtlSec * 1000
@@ -392,6 +476,7 @@ app.post('/sessions/create', async (c) => {
     const session: StreamSession = {
       id: sessionId,
       episodeId,
+      clientKey: clientKey ?? null,
       streamToken,
       totalPaidSeconds: 0,
       maxSegmentIndex: -1,
@@ -402,6 +487,7 @@ app.post('/sessions/create', async (c) => {
 
     return c.json({
       ok: true,
+      fromCache: false,
       session: {
         sessionId,
         episodeId,

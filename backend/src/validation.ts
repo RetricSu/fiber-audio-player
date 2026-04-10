@@ -44,6 +44,12 @@ export const updateEpisodeStatusSchema = z.object({
 
 export const createSessionSchema = z.object({
   episodeId: z.string().uuid('Invalid episodeId format'),
+  clientKey: z
+    .string()
+    .min(1, 'clientKey cannot be empty')
+    .max(256, 'clientKey must be 256 characters or less')
+    .regex(/^[A-Za-z0-9_\-:.]+$/, 'clientKey contains invalid characters')
+    .optional(),
 })
 
 export const createInvoiceSchema = z.object({

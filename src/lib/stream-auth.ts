@@ -11,10 +11,20 @@ export interface BackendNodeInfo {
 
 export interface CreateSessionResponse {
   ok: boolean
+  fromCache?: boolean
   session: {
     sessionId: string
     pricePerSecondShannon: string // hex
     segmentDurationSec: number
+  }
+}
+
+export class BackendRequestTimeoutError extends Error {
+  code = 'REQUEST_TIMEOUT'
+
+  constructor(message = '请求超时，请稍后重试或查询状态') {
+    super(message)
+    this.name = 'BackendRequestTimeoutError'
   }
 }
 
@@ -88,11 +98,41 @@ async function postJson<TRequest, TResponse>(path: string, body: TRequest, timeo
     return payload as TResponse
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('请求超时，请稍后重试或查询状态')
+      throw new BackendRequestTimeoutError()
     }
     throw error
   } finally {
     if (timeoutId) clearTimeout(timeoutId)
+  }
+}
+
+const SESSION_CLIENT_KEY_PREFIX = 'fap:session-client-key:'
+
+function randomClientKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
+}
+
+function getOrCreateSessionClientKey(episodeId?: string): string {
+  const scope = episodeId || 'default'
+  const storageKey = `${SESSION_CLIENT_KEY_PREFIX}${scope}`
+
+  if (typeof window === 'undefined' || !window.sessionStorage) {
+    return randomClientKey()
+  }
+
+  try {
+    const existing = window.sessionStorage.getItem(storageKey)
+    if (existing) {
+      return existing
+    }
+    const created = randomClientKey()
+    window.sessionStorage.setItem(storageKey, created)
+    return created
+  } catch {
+    return randomClientKey()
   }
 }
 
@@ -102,7 +142,12 @@ export async function getBackendNodeInfo(): Promise<BackendNodeInfo> {
 }
 
 export async function createSession(episodeId?: string): Promise<CreateSessionResponse> {
-  return postJson<{ episodeId?: string }, CreateSessionResponse>('/sessions/create', episodeId ? { episodeId } : {}, 10000)
+  const clientKey = getOrCreateSessionClientKey(episodeId)
+  return postJson<{ episodeId?: string; clientKey: string }, CreateSessionResponse>(
+    '/sessions/create',
+    episodeId ? { episodeId, clientKey } : { clientKey },
+    10000,
+  )
 }
 
 export async function createInvoice(input: CreateInvoiceRequest): Promise<CreateInvoiceResponse> {

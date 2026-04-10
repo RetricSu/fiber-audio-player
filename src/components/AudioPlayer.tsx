@@ -8,7 +8,6 @@ import { WaveformVisualizer } from './WaveformVisualizer';
 import { PaymentFlowVisualizer } from './PaymentFlowVisualizer';
 import { PaymentLoadingSimple } from './PaymentLoadingSimple';
 import { getCachedPayment, setCachedPayment } from '@/lib/payment-cache';
-import { createSession } from '@/lib/stream-auth';
 
 interface Episode {
   id: string;
