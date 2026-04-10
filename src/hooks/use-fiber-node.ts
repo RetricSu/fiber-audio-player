@@ -660,9 +660,12 @@ export function useFiberNode(rpcUrl: string, options: UseFiberNodeOptions = {}):
             setChannelStateName(activeChannel.state.state_name);
           }
 
-          const readyChannel = newPeerChannels.find(
-            (ch) => ch.state.state_name === ChannelState.ChannelReady
-          );
+          // In some runtimes (notably browser/WASM), channel id transitions may not
+          // always map cleanly to the pre-open snapshot. If any channel to the
+          // target peer is ready, the setup flow can proceed.
+          const readyChannel =
+            newPeerChannels.find((ch) => ch.state.state_name === ChannelState.ChannelReady) ||
+            peerChannels.find((ch) => ch.state.state_name === ChannelState.ChannelReady);
 
           if (readyChannel) {
             clearChannelTimer();
