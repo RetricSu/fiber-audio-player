@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@fiber-pay/sdk':
-        specifier: 0.2.1
-        version: 0.2.1(@nervosnetwork/fiber-js@0.8.0)
+        specifier: 0.2.2
+        version: 0.2.2(@nervosnetwork/fiber-js@0.8.0)
       '@nervosnetwork/fiber-js':
         specifier: ~0.8.0
         version: 0.8.0
@@ -119,8 +119,8 @@ importers:
   backend:
     dependencies:
       '@fiber-pay/sdk':
-        specifier: 0.2.1
-        version: 0.2.1(@nervosnetwork/fiber-js@0.8.0)
+        specifier: 0.2.2
+        version: 0.2.2(@nervosnetwork/fiber-js@0.8.0)
       '@hono/node-server':
         specifier: ^1.19.4
         version: 1.19.10(hono@4.12.4)
@@ -375,8 +375,8 @@ packages:
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@fiber-pay/sdk@0.2.1':
-    resolution: {integrity: sha512-6W7Wa5mqnlEr//xXv7rLXe/EOHPRPyL+yAEft4cY0jiLNWZvyMUhlKh0LAPaX9v7N7v+KqdVI2hLHwFepxKuWQ==}
+  '@fiber-pay/sdk@0.2.2':
+    resolution: {integrity: sha512-HiKlHBADcyljalRx3/q/oDqEXNlM3Piv0Z3CFZ/rcjpsof6P5Z9vvZNXpUrENj84FwBZJWHZW9bYylSog1XfZA==}
     engines: {node: '>=20'}
     peerDependencies:
       '@nervosnetwork/fiber-js': ~0.8.0
@@ -658,6 +658,10 @@ packages:
 
   '@noble/hashes@2.0.1':
     resolution: {integrity: sha512-XlOlEbQcE9fmuXxrVTXCTlG2nlRXa9Rj3rr5Ue/+tX+nmkgbX720YHh0VR3hBF9xDvwnb8D2shVGOwNx+ulArw==}
+    engines: {node: '>= 20.19.0'}
+
+  '@noble/hashes@2.2.0':
+    resolution: {integrity: sha512-IYqDGiTXab6FniAgnSdZwgWbomxpy9FtYvLKs7wCUs2a8RkITG+DFGO1DM9cr+E3/RgADRpFjrKVaJ1z6sjtEg==}
     engines: {node: '>= 20.19.0'}
 
   '@nodelib/fs.scandir@2.1.5':
@@ -3172,9 +3176,9 @@ snapshots:
       '@eslint/core': 0.17.0
       levn: 0.4.1
 
-  '@fiber-pay/sdk@0.2.1(@nervosnetwork/fiber-js@0.8.0)':
+  '@fiber-pay/sdk@0.2.2(@nervosnetwork/fiber-js@0.8.0)':
     dependencies:
-      '@noble/hashes': 2.0.1
+      '@noble/hashes': 2.2.0
       macaroon: 3.0.4
       zod: 4.3.6
     optionalDependencies:
@@ -3360,6 +3364,8 @@ snapshots:
   '@noble/hashes@1.8.0': {}
 
   '@noble/hashes@2.0.1': {}
+
+  '@noble/hashes@2.2.0': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
