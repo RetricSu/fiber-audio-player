@@ -125,8 +125,8 @@ importers:
         specifier: ^1.19.4
         version: 1.19.10(hono@4.12.4)
       '@noble/hashes':
-        specifier: ^2.0.1
-        version: 2.0.1
+        specifier: ^2.2.0
+        version: 2.2.0
       better-sqlite3:
         specifier: ^12.6.2
         version: 12.6.2
@@ -655,10 +655,6 @@ packages:
   '@noble/hashes@1.8.0':
     resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
     engines: {node: ^14.21.3 || >=16}
-
-  '@noble/hashes@2.0.1':
-    resolution: {integrity: sha512-XlOlEbQcE9fmuXxrVTXCTlG2nlRXa9Rj3rr5Ue/+tX+nmkgbX720YHh0VR3hBF9xDvwnb8D2shVGOwNx+ulArw==}
-    engines: {node: '>= 20.19.0'}
 
   '@noble/hashes@2.2.0':
     resolution: {integrity: sha512-IYqDGiTXab6FniAgnSdZwgWbomxpy9FtYvLKs7wCUs2a8RkITG+DFGO1DM9cr+E3/RgADRpFjrKVaJ1z6sjtEg==}
@@ -3362,8 +3358,6 @@ snapshots:
     optional: true
 
   '@noble/hashes@1.8.0': {}
-
-  '@noble/hashes@2.0.1': {}
 
   '@noble/hashes@2.2.0': {}
 
